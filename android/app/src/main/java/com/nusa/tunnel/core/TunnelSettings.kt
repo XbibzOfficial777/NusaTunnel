@@ -64,6 +64,7 @@ object TunnelSettings {
     private const val KEY_VPN_PRIMARY_DNS = "vpn_primary_dns"
     private const val KEY_VPN_FALLBACK_DNS = "vpn_fallback_dns"
     private const val KEY_VPN_MTU = "vpn_mtu"
+    private const val KEY_SPEED_UNIT = "traffic_speed_unit"
 
     fun parseSocksPort(value: String): Int? =
         value.trim().toIntOrNull()?.takeIf { it in 1..65_535 }
@@ -163,6 +164,13 @@ object TunnelSettings {
 
     private fun normalizeLogEntryLimit(limit: Int): Int =
         limit.coerceIn(MIN_LOG_ENTRY_LIMIT, MAX_LOG_ENTRY_LIMIT)
+
+    fun speedUnit(context: Context): SpeedUnit =
+        SpeedUnit.fromPreference(prefs(context).getString(KEY_SPEED_UNIT, null))
+
+    fun setSpeedUnit(context: Context, unit: SpeedUnit) {
+        prefs(context).edit().putString(KEY_SPEED_UNIT, unit.preferenceValue).apply()
+    }
 
     fun autoPingEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_AUTO_PING, false)

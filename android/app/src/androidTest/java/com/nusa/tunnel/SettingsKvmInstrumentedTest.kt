@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import org.junit.Assert.assertEquals
@@ -70,6 +71,29 @@ class SettingsKvmInstrumentedTest {
         compose.onNodeWithTag("reset_log_entry_limit").performClick()
         compose.onNodeWithTag("save_log_entry_limit").performClick()
         assertEquals(TunnelSettings.DEFAULT_LOG_ENTRY_LIMIT, TunnelSettings.logEntryLimit(context))
+    }
+
+    @Test
+    fun speedUnitChoicePersistsAndSurvivesActivityRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val original = TunnelSettings.speedUnit(context)
+        val selected = if (original == SpeedUnit.BytesPerSecond) {
+            SpeedUnit.BitsPerSecond
+        } else {
+            SpeedUnit.BytesPerSecond
+        }
+
+        compose.onNodeWithText("Atur").performClick()
+        compose.onNodeWithTag("speed_unit_choice").performScrollTo().performClick()
+        compose.onNodeWithText(selected.label).performClick()
+        assertEquals(selected, TunnelSettings.speedUnit(context))
+
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithTag("speed_unit_choice").performScrollTo()
+        compose.onNodeWithText(selected.label).assertIsDisplayed()
+
+        TunnelSettings.setSpeedUnit(context, original)
     }
 
     @Test

@@ -24,6 +24,7 @@ import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LinkParser
 import com.nusa.tunnel.core.ServerStore
 import com.nusa.tunnel.core.SmartImporter
+import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.SubscriptionManager
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
@@ -86,6 +87,9 @@ class MainActivity : ComponentActivity() {
                 }
                 var logEntryLimit by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.logEntryLimit(this@MainActivity))
+                }
+                var speedUnit by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.speedUnit(this@MainActivity))
                 }
                 var autoPing by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.autoPingEnabled(this@MainActivity))
@@ -213,6 +217,11 @@ class MainActivity : ComponentActivity() {
                             logEntryLimit = limit
                             TunnelManager.setLogEntryLimit(limit)
                         }
+                    },
+                    speedUnit = speedUnit,
+                    onSpeedUnit = { unit ->
+                        TunnelSettings.setSpeedUnit(this@MainActivity, unit)
+                        speedUnit = unit
                     },
                     autoPing = autoPing,
                     onAutoPing = {

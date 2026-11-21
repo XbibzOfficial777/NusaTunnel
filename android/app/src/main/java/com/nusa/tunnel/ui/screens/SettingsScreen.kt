@@ -54,6 +54,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.BuildConfig
 import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.UdpTunnelEngine
@@ -78,6 +79,8 @@ fun SettingsScreen(
     onLogLevel: (EngineLogLevel) -> Unit,
     logEntryLimit: Int,
     onLogEntryLimit: (Int) -> Unit,
+    speedUnit: SpeedUnit,
+    onSpeedUnit: (SpeedUnit) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
     vpnBehavior: VpnBehaviorSettings,
@@ -126,6 +129,16 @@ fun SettingsScreen(
                     LogEntryLimitRow(
                         value = logEntryLimit,
                         onSave = onLogEntryLimit,
+                    )
+                    SettingsDivider()
+                    ChoiceRow(
+                        title = "Speed unit",
+                        summary = "Mengubah satuan laju unggah/unduh langsung di Beranda; total sesi tetap dalam byte.",
+                        selected = speedUnit.label,
+                        options = SpeedUnit.entries,
+                        optionLabel = { it.label },
+                        onSelected = onSpeedUnit,
+                        testTag = "speed_unit_choice",
                     )
                 }
                 Spacer(Modifier.height(16.dp))
@@ -552,6 +565,7 @@ private fun <T> ChoiceRow(
     options: List<T>,
     optionLabel: (T) -> String,
     onSelected: (T) -> Unit,
+    testTag: String? = null,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(
@@ -566,7 +580,9 @@ private fun <T> ChoiceRow(
         Box(Modifier.fillMaxWidth()) {
             OutlinedButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
             ) {
