@@ -2,7 +2,7 @@
 
 **Baseline:** v2.2.4 (`e6c8011`, released 2026-11-21)  
 **Reference:** all 38 settings screenshots in the supplied `ISI SETTINGS` folder and `BACA.TXT`.  
-**Status:** Phase 1 is in progress on a local feature branch. The new settings hierarchy and persisted DNS/MTU wiring are not yet verified by remote CI or a device. Planning and implementation must be feature-backed; an enabled UI control is not complete until its stored value changes real runtime behavior.
+**Status:** Phase 1 is in progress on `settings-parity-phase1` (commit `181480c`). Remote GitHub Actions run [44882232628](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44882232628) passed the unit/config tests, release APK build, and Xray-core config validation. VPN DNS/MTU and the partial settings hierarchy are not device-validated; remaining General/Connection parity is still open. Planning and implementation must be feature-backed; an enabled UI control is not complete until its stored value changes real runtime behavior.
 
 ## Acceptance rule — no simulation
 

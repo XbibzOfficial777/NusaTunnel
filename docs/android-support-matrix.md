@@ -14,6 +14,8 @@ Audit date: 2026-11-21. This matrix describes the Android implementation, not th
 | Log retention | Persists a 100 / 400 / 1,000-entry in-memory cap; changing it trims the current log immediately. |
 | SOCKS5 port | Persists and validates ports 1–65535; rejects invalid input before connecting and applies the saved port on the next connection. |
 | Destination sniffing | Persists the switch and passes it into the generated Xray config for active inbounds; changes apply on the next connection. |
+| VPN DNS and MTU | Persists two numeric IPv4 DNS servers and MTU (1280–9000); Android `VpnService.Builder`, Xray TUN config, and Hev config consume the saved values on the next connection. DNS/MTU generation is covered by remote CI; device routing is not yet verified. |
+| IPv6 route | IPv6 remains routed through the VPN. There is deliberately no off switch yet because that could leak IPv6 outside the tunnel until a real packet-blocking path is validated. |
 | Auto-ping | Opt-in: pings the selected server every five minutes only while the app is foregrounded and the VPN is disconnected. Off by default to avoid extra idle traffic. |
 
 Hev mode uses the Android VPN TUN fd in HevSocks5Tunnel and keeps Xray as a local SOCKS5 proxy. Its native worker is health-checked and stopped before Xray during teardown. The Xray-native mode remains available as a fallback.
