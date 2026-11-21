@@ -142,7 +142,7 @@ jobs:
             exit 1
           fi
           sudo chmod 666 /dev/kvm
-          emulator -accel-check
+          "$ANDROID_SDK_ROOT/emulator/emulator" -accel-check
 
       - name: Cache Android engine AARs
         id: engine-aars
