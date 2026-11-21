@@ -113,7 +113,7 @@ class SettingsKvmInstrumentedTest {
 
         compose.onNodeWithText("Atur").performClick()
         compose.onNodeWithText("Per-app VPN").performScrollTo().performClick()
-        compose.onNodeWithTag("vpn_app_mode_choice").performScrollTo().performClick()
+        compose.onNodeWithTag("vpn_app_mode_choice").performClick()
         compose.onNodeWithText(VpnAppRoutingMode.SelectedOnly.label).performClick()
         compose.onNodeWithTag("vpn_app_${selectedApp.packageName}")
             .performScrollTo().performClick()
