@@ -360,3 +360,29 @@ konektivitas: curl via SOCKS sukses saat server hidup, GAGAL saat server dimatik
 - urllib tidak mendukung socks5h tanpa PySocks — uji konektivitas pakai curl
 - GTK terbukti rapuh lintas platform & "kaku" — web tech memberi animasi terbaik
   dengan satu basis kode untuk semua OS
+
+
+---
+
+## 2026-11-21 — v2.2.0 Android + GitHub
+
+**Repo**: https://github.com/XbibzOfficial777/NusaTunnel (pairing device gh CLI, akun XbibzOfficial777)
+
+**Release v2.2.0** (5 aset, semua terverifikasi): .deb 93MB, Windows zip 142MB, macOS AppleSilicon 19MB,
+macOS Intel 20MB, Android universal APK 180MB.
+
+**Android (BARU)** — `com.nusa.tunnel`, developer Xbibz Official:
+- Stack: Gradle 9.9.2 + AGP 9.5.2 + Kotlin 2.4.21 + Compose BOM 2026.11.01 (semua stable terbaru, diverifikasi langsung dari maven.google.com/repo1)
+- AGP 9 pakai KGP klasik lewat jalur resmi opt-out `android.builtInKotlin=false` + `android.newDsl=false` (AGP 9 default built-in Kotlin 2.2.10)
+- Engine nyata: AndroidLibXrayLite v26.11.9 (Xray-core, libgojni.so 4 ABI, geoip/geosite)
+- VpnService TUN: fd VPN diteruskan via startLoop(config, tunFd) — pola sama dengan v2rayNG
+- Fitur nyata: import vmess/vless/trojan/ss (base64+SIP002), ping via measureOutboundDelay,
+  statistik via queryAllOutboundTrafficStats (diambil dari counter Xray, bukan simulasi)
+- UI Midnight Aurora: liquid glass card, tombol connect pulsar (infinite transition),
+  transisi AnimatedContent, bottom nav, Montserrat offline (TTF dari upstream JulietaUla),
+  paginasi 15 + MUAT LAGI (+15)
+- Keystore rilis self-signed (keytool, 30 tahun); keystore TIDAK di-commit ke repo
+- Verifikasi: aapt badging (com.nusa.tunnel v2.2.0, minSdk 26, target 37), apksigner V2 OK,
+  dex berisi kelas app + binding libv2ray, 4 ABI native-code
+
+**Upload catbox gagal** (IP datacenter diblok "Invalid uploader", x0.at banned) → GitHub Releases jadi kanal utama.
