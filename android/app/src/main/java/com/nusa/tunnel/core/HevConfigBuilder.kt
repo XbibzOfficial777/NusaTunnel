@@ -2,11 +2,18 @@ package com.nusa.tunnel.core
 
 /** Builds the HevSocks5Tunnel YAML used with the Android VpnService TUN file descriptor. */
 object HevConfigBuilder {
-    fun build(socksPort: Int, logLevel: EngineLogLevel = EngineLogLevel.Warning): String {
+    fun build(
+        socksPort: Int,
+        logLevel: EngineLogLevel = EngineLogLevel.Warning,
+        mtu: Int = VpnBehaviorSettings.DEFAULT_MTU,
+    ): String {
         require(socksPort in 1..65535) { "SOCKS5 port must be 1..65535" }
+        require(mtu in VpnBehaviorSettings.MIN_MTU..VpnBehaviorSettings.MAX_MTU) {
+            "VPN MTU must be ${VpnBehaviorSettings.MIN_MTU}..${VpnBehaviorSettings.MAX_MTU}"
+        }
         return """
             tunnel:
-              mtu: 1500
+              mtu: $mtu
               ipv4: 10.10.14.1
               ipv6: 'fc00::10:10:14:1'
               icmp: 'off'

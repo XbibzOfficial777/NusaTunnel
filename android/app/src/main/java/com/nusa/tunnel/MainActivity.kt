@@ -30,6 +30,7 @@ import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.TunnelState
 import com.nusa.tunnel.core.UdpTunnelEngine
+import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.AppRoot
 import com.nusa.tunnel.ui.Dest
 import com.nusa.tunnel.ui.theme.NusaTunnelTheme
@@ -89,6 +90,9 @@ class MainActivity : ComponentActivity() {
                 }
                 var autoPing by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.autoPingEnabled(this@MainActivity))
+                }
+                var vpnBehavior by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.vpnBehavior(this@MainActivity))
                 }
                 var subBusy by androidx.compose.runtime.remember { mutableStateOf(false) }
 
@@ -214,6 +218,20 @@ class MainActivity : ComponentActivity() {
                     onAutoPing = {
                         autoPing = it
                         TunnelSettings.setAutoPingEnabled(this@MainActivity, it)
+                    },
+                    vpnBehavior = vpnBehavior,
+                    onVpnBehavior = { next ->
+                        if (TunnelSettings.setVpnBehavior(this@MainActivity, next)) {
+                            vpnBehavior = next
+                            TunnelManager.log(
+                                "Pengaturan VPN disimpan: MTU ${next.mtu}, DNS ${next.dnsServers.joinToString()}; berlaku pada koneksi berikutnya",
+                            )
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Pengaturan VPN disimpan",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                     },
                     subUrl = subUrl ?: "",
                     onSubUrl = { url -> scope.launch { store.setSubscription(url.ifBlank { null }) } },

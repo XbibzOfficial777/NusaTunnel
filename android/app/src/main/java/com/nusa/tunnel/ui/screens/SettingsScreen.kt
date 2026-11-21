@@ -1,6 +1,8 @@
 package com.nusa.tunnel.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -16,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Engineering
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -25,6 +29,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +54,7 @@ import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.UdpTunnelEngine
+import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.components.GlassCard
 import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Danger
@@ -71,7 +77,12 @@ fun SettingsScreen(
     onLogRetention: (LogRetention) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
+    vpnBehavior: VpnBehaviorSettings,
+    onVpnBehavior: (VpnBehaviorSettings) -> Unit,
 ) {
+    var subPage by rememberSaveable { mutableStateOf("") }
+    BackHandler(enabled = subPage.isNotEmpty()) { subPage = "" }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -83,83 +94,242 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            Text("Pengaturan", style = MaterialTheme.typography.titleLarge, color = Frost)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Pengaturan yang disimpan dan dipakai oleh tunnel NusaTunnel.",
-                style = MaterialTheme.typography.bodySmall,
-                color = FrostDim,
-            )
-            Spacer(Modifier.height(20.dp))
+            if (subPage == "vpn") {
+                VpnBehaviorPage(
+                    settings = vpnBehavior,
+                    onSave = onVpnBehavior,
+                    onBack = { subPage = "" },
+                )
+            } else {
+                Text("Settings", style = MaterialTheme.typography.titleLarge, color = Frost)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Pengaturan yang tersimpan dan dipakai oleh engine Android NusaTunnel.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = FrostDim,
+                )
+                Spacer(Modifier.height(20.dp))
 
-            SettingsSection("Umum", Icons.Rounded.Info) {
-                ChoiceRow(
-                    title = "Tingkat log engine",
-                    summary = "Detail log Xray dan Hev. Perubahan berlaku pada koneksi berikutnya.",
-                    selected = logLevel.label,
-                    options = EngineLogLevel.entries,
-                    optionLabel = { it.label },
-                    onSelected = onLogLevel,
-                )
-                SettingsDivider()
-                ChoiceRow(
-                    title = "Riwayat log",
-                    summary = "Jumlah entri yang disimpan di memori aplikasi. Mengubah batas langsung merapikan log yang ada.",
-                    selected = logRetention.label,
-                    options = LogRetention.entries,
-                    optionLabel = { it.label },
-                    onSelected = onLogRetention,
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-
-            SettingsSection("Koneksi", Icons.Rounded.Lan) {
-                SocksPortRow(value = socksPort, onValueChange = onSocksPort)
-                SettingsDivider()
-                SwitchRow(
-                    title = "Ping otomatis",
-                    summary = "Cek server terpilih tiap 5 menit hanya saat aplikasi di depan dan tunnel terputus. Nonaktif secara default agar tidak menambah trafik idle.",
-                    checked = autoPing,
-                    onCheckedChange = onAutoPing,
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-
-            SettingsSection("Tunnel", Icons.Rounded.Settings) {
-                SwitchRow(
-                    title = "Deteksi tujuan (sniffing)",
-                    summary = "Deteksi tujuan HTTP, TLS, dan QUIC untuk routing. Perubahan berlaku pada koneksi berikutnya.",
-                    checked = sniffer,
-                    onCheckedChange = onSniffer,
-                )
-                SettingsDivider()
-                ChoiceRow(
-                    title = "Engine paket UDP",
-                    summary = "Pilih HevSocks5Tunnel (Android 10+) atau Xray native TUN. Android 9 ke bawah otomatis memakai Xray; pilihan berlaku pada koneksi berikutnya.",
-                    selected = udpEngine.label,
-                    options = UdpTunnelEngine.entries,
-                    optionLabel = { it.label },
-                    onSelected = onUdpEngine,
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-
-            SettingsSection("Tentang", Icons.Rounded.Engineering) {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    InfoRow("Versi aplikasi", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                    InfoRow("Engine", TunnelManager.engineVersion())
-                    InfoRow("Mode", "VPN · TUN seluruh sistem")
-                    InfoRow("MTU", "1500")
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "Android mendukung VMess, VLESS, Trojan, dan Shadowsocks melalui Xray-core. Pengaturan di atas tidak mengaktifkan protokol yang belum tersedia.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = FrostDim,
+                SettingsSection("General", Icons.Rounded.Info) {
+                    ChoiceRow(
+                        title = "Log filter",
+                        summary = "Mengatur tingkat detail log dari Xray dan Hev. Berlaku pada koneksi berikutnya.",
+                        selected = logLevel.label,
+                        options = EngineLogLevel.entries,
+                        optionLabel = { it.label },
+                        onSelected = onLogLevel,
+                    )
+                    SettingsDivider()
+                    ChoiceRow(
+                        title = "Log entry limit",
+                        summary = "Jumlah entri log yang dipertahankan di memori. Perubahan langsung merapikan entri lama.",
+                        selected = logRetention.label,
+                        options = LogRetention.entries,
+                        optionLabel = { it.label },
+                        onSelected = onLogRetention,
                     )
                 }
+                Spacer(Modifier.height(16.dp))
+
+                SettingsSection("Connection", Icons.Rounded.Lan) {
+                    SocksPortRow(value = socksPort, onValueChange = onSocksPort)
+                    SettingsDivider()
+                    SettingsActionRow(
+                        title = "VPN behavior",
+                        summary = "DNS ${vpnBehavior.primaryDns}, ${vpnBehavior.fallbackDns} · MTU ${vpnBehavior.mtu}",
+                        onClick = { subPage = "vpn" },
+                    )
+                    SettingsDivider()
+                    SwitchRow(
+                        title = "Auto Ping",
+                        summary = "Ping server terpilih setiap lima menit hanya saat aplikasi terlihat dan VPN terputus.",
+                        checked = autoPing,
+                        onCheckedChange = onAutoPing,
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+
+                SettingsSection("Tunnel", Icons.Rounded.Settings) {
+                    SwitchRow(
+                        title = "Destination detection",
+                        summary = "Deteksi tujuan HTTP, TLS, dan QUIC melalui konfigurasi sniffing Xray. Berlaku pada koneksi berikutnya.",
+                        checked = sniffer,
+                        onCheckedChange = onSniffer,
+                    )
+                    SettingsDivider()
+                    ChoiceRow(
+                        title = "TUN packet engine",
+                        summary = "HevSocks5Tunnel (Android 10+) atau Xray native TUN. Android 9 ke bawah memakai Xray native.",
+                        selected = udpEngine.label,
+                        options = UdpTunnelEngine.entries,
+                        optionLabel = { it.label },
+                        onSelected = onUdpEngine,
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+
+                SettingsSection("About", Icons.Rounded.Engineering) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        InfoRow("App version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                        InfoRow("Engine", TunnelManager.engineVersion())
+                        InfoRow("Mode", "Android VPN · TUN")
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Saat ini Android benar-benar mendukung VMess, VLESS, Trojan, dan Shadowsocks melalui Xray-core. SSH, SlowDNS, HCR, Psiphon, OpenVPN, dan fitur lanjutan lain belum diaktifkan sebagai kontrol palsu; implementasinya dicatat di roadmap.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = FrostDim,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+private fun VpnBehaviorPage(
+    settings: VpnBehaviorSettings,
+    onSave: (VpnBehaviorSettings) -> Unit,
+    onBack: () -> Unit,
+) {
+    var primaryDns by rememberSaveable(settings.primaryDns) { mutableStateOf(settings.primaryDns) }
+    var fallbackDns by rememberSaveable(settings.fallbackDns) { mutableStateOf(settings.fallbackDns) }
+    var mtuText by rememberSaveable(settings.mtu) { mutableStateOf(settings.mtu.toString()) }
+    val mtu = TunnelSettings.parseVpnMtu(mtuText)
+    val dnsValid = TunnelSettings.isValidIpv4Address(primaryDns) &&
+        TunnelSettings.isValidIpv4Address(fallbackDns)
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Kembali", tint = Frost)
+        }
+        Text("VPN behavior", style = MaterialTheme.typography.titleLarge, color = Frost)
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "DNS dan MTU ini dipakai Android VpnService, Xray, dan Hev pada koneksi berikutnya. DNS harus berupa alamat IPv4.",
+        style = MaterialTheme.typography.bodySmall,
+        color = FrostDim,
+    )
+    Spacer(Modifier.height(16.dp))
+
+    SettingsSection("DNS", Icons.Rounded.Lan) {
+        NumericOrIpField(
+            value = primaryDns,
+            onValueChange = { primaryDns = it },
+            label = "Primary DNS",
+            valid = TunnelSettings.isValidIpv4Address(primaryDns),
+            error = "Masukkan alamat IPv4 yang valid, misalnya 8.8.8.8.",
+        )
+        SettingsDivider()
+        NumericOrIpField(
+            value = fallbackDns,
+            onValueChange = { fallbackDns = it },
+            label = "Fallback DNS",
+            valid = TunnelSettings.isValidIpv4Address(fallbackDns),
+            error = "Masukkan alamat IPv4 yang valid, misalnya 1.1.1.1.",
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+
+    SettingsSection("MTU", Icons.Rounded.Settings) {
+        NumericOrIpField(
+            value = mtuText,
+            onValueChange = { mtuText = it.filter { character -> character.isDigit() }.take(4) },
+            label = "MTU (1280–9000)",
+            valid = mtu != null,
+            error = "Masukkan MTU antara ${VpnBehaviorSettings.MIN_MTU} dan ${VpnBehaviorSettings.MAX_MTU}.",
+            keyboardType = KeyboardType.Number,
+        )
+    }
+    Spacer(Modifier.height(12.dp))
+    Text(
+        "IPv6 saat ini tetap dirutekan melalui VPN agar trafik tidak keluar langsung di luar tunnel. Kontrol untuk mematikan IPv6 baru akan ditambahkan setelah jalur pemblokiran kebocorannya tervalidasi.",
+        style = MaterialTheme.typography.bodySmall,
+        color = FrostDim,
+    )
+    Spacer(Modifier.height(16.dp))
+    OutlinedButton(
+        onClick = {
+            onSave(
+                VpnBehaviorSettings(
+                    primaryDns = primaryDns.trim(),
+                    fallbackDns = fallbackDns.trim(),
+                    mtu = mtu ?: settings.mtu,
+                ),
+            )
+        },
+        enabled = dnsValid && mtu != null,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
+    ) {
+        Text("Save · applies next connection")
+    }
+}
+
+@Composable
+private fun NumericOrIpField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    valid: Boolean,
+    error: String,
+    keyboardType: KeyboardType = KeyboardType.Ascii,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(label) },
+            isError = !valid,
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            supportingText = {
+                if (!valid) Text(error, color = Danger, style = MaterialTheme.typography.bodySmall)
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Spruce,
+                unfocusedBorderColor = Color(0x44FFFFFF),
+                errorBorderColor = Danger,
+                focusedTextColor = Frost,
+                unfocusedTextColor = Frost,
+                errorTextColor = Frost,
+                focusedLabelColor = Mint,
+                unfocusedLabelColor = FrostDim,
+                errorLabelColor = Danger,
+                cursorColor = Spruce,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun SettingsActionRow(
+    title: String,
+    summary: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(end = 10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = Frost)
+            Spacer(Modifier.height(3.dp))
+            Text(summary, style = MaterialTheme.typography.bodySmall, color = FrostDim)
+        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = FrostDim)
     }
 }
 
