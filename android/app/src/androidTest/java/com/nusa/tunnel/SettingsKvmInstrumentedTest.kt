@@ -2,6 +2,7 @@ package com.nusa.tunnel
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -10,9 +11,15 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelSettings
+import com.nusa.tunnel.core.VpnAppRoutingMode
+import com.nusa.tunnel.core.VpnAppRoutingSettings
+import com.nusa.tunnel.core.VpnApplicationCatalog
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,6 +77,61 @@ class SettingsKvmInstrumentedTest {
         compose.onNodeWithTag("reset_log_entry_limit").performClick()
         compose.onNodeWithTag("save_log_entry_limit").performClick()
         assertEquals(TunnelSettings.DEFAULT_LOG_ENTRY_LIMIT, TunnelSettings.logEntryLimit(context))
+    }
+
+    @Test
+    fun speedUnitChoicePersistsAndSurvivesActivityRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val original = TunnelSettings.speedUnit(context)
+        val selected = if (original == SpeedUnit.BytesPerSecond) {
+            SpeedUnit.BitsPerSecond
+        } else {
+            SpeedUnit.BytesPerSecond
+        }
+
+        compose.onNodeWithText("Atur").performClick()
+        compose.onNodeWithTag("speed_unit_choice").performScrollTo().performClick()
+        compose.onNodeWithText(selected.label).performClick()
+        assertEquals(selected, TunnelSettings.speedUnit(context))
+
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithTag("speed_unit_choice").performScrollTo()
+        compose.onNodeWithText(selected.label).assertIsDisplayed()
+
+        TunnelSettings.setSpeedUnit(context, original)
+    }
+
+    @Test
+    fun perAppVpnAllowlistPersistsAndIsAppliedToTheEditorAfterRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val original = TunnelSettings.vpnAppRouting(context)
+        val app = VpnApplicationCatalog.launchableApps(context).firstOrNull()
+        assertNotNull("KVM emulator must expose at least one launchable app", app)
+        val selectedApp = requireNotNull(app)
+        TunnelSettings.setVpnAppRouting(context, VpnAppRoutingSettings())
+
+        compose.onNodeWithText("Atur").performClick()
+        compose.onNodeWithText("Per-app VPN").performScrollTo().performClick()
+        compose.onNodeWithTag("vpn_app_mode_choice").performClick()
+        compose.onNodeWithText(VpnAppRoutingMode.SelectedOnly.label).performClick()
+        compose.onNodeWithTag("vpn_app_${selectedApp.packageName}")
+            .performScrollTo().performClick()
+        compose.onNodeWithTag("save_vpn_app_routing").performClick()
+
+        val expected = VpnAppRoutingSettings(
+            VpnAppRoutingMode.SelectedOnly,
+            setOf(selectedApp.packageName),
+        )
+        assertEquals(expected, TunnelSettings.vpnAppRouting(context))
+
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithText("Per-app VPN").performScrollTo().performClick()
+        compose.onNodeWithTag("vpn_app_check_${selectedApp.packageName}")
+            .performScrollTo().assertIsOn()
+
+        assertTrue(TunnelSettings.setVpnAppRouting(context, original))
     }
 
     @Test

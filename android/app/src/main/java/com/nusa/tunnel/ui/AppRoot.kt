@@ -28,7 +28,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.UdpTunnelEngine
+import com.nusa.tunnel.core.VpnAppInfo
+import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.screens.DashboardScreen
 import com.nusa.tunnel.ui.screens.LogsScreen
@@ -71,10 +74,15 @@ fun AppRoot(
     onLogLevel: (EngineLogLevel) -> Unit,
     logEntryLimit: Int,
     onLogEntryLimit: (Int) -> Unit,
+    speedUnit: SpeedUnit,
+    onSpeedUnit: (SpeedUnit) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
     vpnBehavior: VpnBehaviorSettings,
     onVpnBehavior: (VpnBehaviorSettings) -> Unit,
+    vpnAppRouting: VpnAppRoutingSettings,
+    availableVpnApps: List<VpnAppInfo>,
+    onVpnAppRouting: (VpnAppRoutingSettings) -> Unit,
     subUrl: String,
     onSubUrl: (String) -> Unit,
     subAuto: Boolean,
@@ -125,6 +133,7 @@ fun AppRoot(
                 when (d) {
                     Dest.Dashboard -> DashboardScreen(
                         serverName = servers.firstOrNull { it.id == selectedId }?.remarks ?: "",
+                        speedUnit = speedUnit,
                         onToggle = dashboardToggle,
                     )
                     Dest.Servers -> ServersScreen(
@@ -153,10 +162,15 @@ fun AppRoot(
                         onLogLevel = onLogLevel,
                         logEntryLimit = logEntryLimit,
                         onLogEntryLimit = onLogEntryLimit,
+                        speedUnit = speedUnit,
+                        onSpeedUnit = onSpeedUnit,
                         autoPing = autoPing,
                         onAutoPing = onAutoPing,
                         vpnBehavior = vpnBehavior,
                         onVpnBehavior = onVpnBehavior,
+                        vpnAppRouting = vpnAppRouting,
+                        availableVpnApps = availableVpnApps,
+                        onVpnAppRouting = onVpnAppRouting,
                     )
                     Dest.Logs -> LogsScreen()
                 }

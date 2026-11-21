@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -54,9 +57,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.BuildConfig
 import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.UdpTunnelEngine
+import com.nusa.tunnel.core.VpnAppInfo
+import com.nusa.tunnel.core.VpnAppRoutingMode
+import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.components.GlassCard
 import com.nusa.tunnel.ui.theme.AuroraGradient
@@ -78,10 +85,15 @@ fun SettingsScreen(
     onLogLevel: (EngineLogLevel) -> Unit,
     logEntryLimit: Int,
     onLogEntryLimit: (Int) -> Unit,
+    speedUnit: SpeedUnit,
+    onSpeedUnit: (SpeedUnit) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
     vpnBehavior: VpnBehaviorSettings,
     onVpnBehavior: (VpnBehaviorSettings) -> Unit,
+    vpnAppRouting: VpnAppRoutingSettings,
+    availableVpnApps: List<VpnAppInfo>,
+    onVpnAppRouting: (VpnAppRoutingSettings) -> Unit,
 ) {
     var subPage by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = subPage.isNotEmpty()) { subPage = "" }
@@ -91,13 +103,21 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(AuroraGradient)
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-        ) {
-            if (subPage == "vpn") {
+        if (subPage == "per_app") {
+            PerAppVpnPage(
+                settings = vpnAppRouting,
+                apps = availableVpnApps,
+                onSave = onVpnAppRouting,
+                onBack = { subPage = "" },
+            )
+        } else {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+            ) {
+                if (subPage == "vpn") {
                 VpnBehaviorPage(
                     settings = vpnBehavior,
                     onSave = onVpnBehavior,
@@ -127,6 +147,16 @@ fun SettingsScreen(
                         value = logEntryLimit,
                         onSave = onLogEntryLimit,
                     )
+                    SettingsDivider()
+                    ChoiceRow(
+                        title = "Speed unit",
+                        summary = "Mengubah satuan laju unggah/unduh langsung di Beranda; total sesi tetap dalam byte.",
+                        selected = speedUnit.label,
+                        options = SpeedUnit.entries,
+                        optionLabel = { it.label },
+                        onSelected = onSpeedUnit,
+                        testTag = "speed_unit_choice",
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
 
@@ -137,6 +167,12 @@ fun SettingsScreen(
                         title = "VPN behavior",
                         summary = "DNS ${vpnBehavior.primaryDns}, ${vpnBehavior.fallbackDns} · MTU ${vpnBehavior.mtu}",
                         onClick = { subPage = "vpn" },
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        title = "Per-app VPN",
+                        summary = "${vpnAppRouting.mode.label} · ${vpnAppRouting.selectedPackages.size} selected · applies next connection",
+                        onClick = { subPage = "per_app" },
                     )
                     SettingsDivider()
                     SwitchRow(
@@ -181,7 +217,131 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(24.dp))
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun PerAppVpnPage(
+    settings: VpnAppRoutingSettings,
+    apps: List<VpnAppInfo>,
+    onSave: (VpnAppRoutingSettings) -> Unit,
+    onBack: () -> Unit,
+) {
+    var modeValue by rememberSaveable(settings.mode.preferenceValue) {
+        mutableStateOf(settings.mode.preferenceValue)
+    }
+    val mode = VpnAppRoutingMode.fromPreference(modeValue)
+    val initialPackages = settings.selectedPackages.sorted().joinToString("\n")
+    var selectedPackagesText by rememberSaveable(initialPackages) {
+        mutableStateOf(initialPackages)
+    }
+    var search by rememberSaveable { mutableStateOf("") }
+    val selectedPackages = selectedPackagesText.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+    val filteredApps = apps.filter { app ->
+        search.isBlank() || app.label.contains(search, ignoreCase = true) ||
+            app.packageName.contains(search, ignoreCase = true)
+    }
+
+    fun togglePackage(packageName: String, checked: Boolean) {
+        val updated = selectedPackages.toMutableSet().apply {
+            if (checked) add(packageName) else remove(packageName)
+        }
+        selectedPackagesText = updated.sorted().joinToString("\n")
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Kembali", tint = Frost)
+            }
+            Column {
+                Text("Per-app VPN", style = MaterialTheme.typography.titleLarge, color = Frost)
+                Text("Berlaku pada koneksi berikutnya", style = MaterialTheme.typography.bodySmall, color = FrostDim)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        ChoiceRow(
+            title = "Application routing",
+            summary = "Atur aplikasi yang memakai VPN Android. NusaTunnel sendiri selalu dikecualikan agar koneksi engine tidak berputar ke TUN.",
+            selected = mode.label,
+            options = VpnAppRoutingMode.entries,
+            optionLabel = { it.label },
+            onSelected = { modeValue = it.preferenceValue },
+            testTag = "vpn_app_mode_choice",
+        )
+        OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            modifier = Modifier.fillMaxWidth().testTag("vpn_app_search"),
+            label = { Text("Cari aplikasi") },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "${selectedPackages.size} dipilih · ${apps.size} aplikasi dengan ikon peluncur",
+            style = MaterialTheme.typography.bodySmall,
+            color = FrostDim,
+        )
+        Spacer(Modifier.height(6.dp))
+        if (filteredApps.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    if (apps.isEmpty()) "Tidak ada aplikasi peluncur yang dapat dipilih."
+                    else "Aplikasi tidak ditemukan.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = FrostDim,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth().testTag("vpn_app_list"),
+            ) {
+                items(filteredApps, key = VpnAppInfo::packageName) { app ->
+                    val checked = app.packageName in selectedPackages
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { togglePackage(app.packageName, !checked) }
+                            .testTag("vpn_app_${app.packageName}")
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = checked,
+                            onCheckedChange = { togglePackage(app.packageName, it) },
+                            modifier = Modifier.testTag("vpn_app_check_${app.packageName}"),
+                        )
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text(app.label, style = MaterialTheme.typography.titleSmall, color = Frost)
+                            Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = FrostDim)
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = {
+                onSave(VpnAppRoutingSettings(mode, selectedPackages))
+                onBack()
+            },
+            enabled = mode != VpnAppRoutingMode.SelectedOnly || selectedPackages.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth().testTag("save_vpn_app_routing"),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
+        ) {
+            Text("Save · applies next connection")
         }
     }
 }
@@ -552,6 +712,7 @@ private fun <T> ChoiceRow(
     options: List<T>,
     optionLabel: (T) -> String,
     onSelected: (T) -> Unit,
+    testTag: String? = null,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(
@@ -566,7 +727,9 @@ private fun <T> ChoiceRow(
         Box(Modifier.fillMaxWidth()) {
             OutlinedButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
             ) {

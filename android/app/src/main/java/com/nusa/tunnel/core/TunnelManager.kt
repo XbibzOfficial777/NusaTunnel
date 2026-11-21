@@ -3,6 +3,7 @@ package com.nusa.tunnel.core
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import com.nusa.tunnel.service.TunnelVpnService
 import go.Seq
@@ -29,6 +30,8 @@ data class TunnelStatus(
     val error: String = "",
     val upBytes: Long = 0L,
     val downBytes: Long = 0L,
+    val uploadBytesPerSecond: Long = 0L,
+    val downloadBytesPerSecond: Long = 0L,
     val engineVersion: String = "",
 )
 
@@ -175,7 +178,11 @@ object TunnelManager {
 
     fun disconnect(context: Context) {
         if (_status.value.state == TunnelState.Idle) return
-        _status.value = _status.value.copy(state = TunnelState.Disconnecting)
+        _status.value = _status.value.copy(
+            state = TunnelState.Disconnecting,
+            uploadBytesPerSecond = 0L,
+            downloadBytesPerSecond = 0L,
+        )
         stopStatsPolling()
         log("Memutuskan tunnel…")
         context.startService(Intent(context, TunnelVpnService::class.java).apply {
@@ -229,7 +236,12 @@ object TunnelManager {
 
     fun onCoreError(message: String) {
         coreStarted = false
-        _status.value = _status.value.copy(state = TunnelState.Error, error = message)
+        _status.value = _status.value.copy(
+            state = TunnelState.Error,
+            error = message,
+            uploadBytesPerSecond = 0L,
+            downloadBytesPerSecond = 0L,
+        )
         log("Error core: $message")
         stopStatsPolling()
     }
@@ -246,7 +258,15 @@ object TunnelManager {
         if (_status.value.state != TunnelState.Error) {
             _status.value = _status.value.copy(
                 state = TunnelState.Idle,
-                upBytes = 0, downBytes = 0,
+                upBytes = 0L,
+                downBytes = 0L,
+                uploadBytesPerSecond = 0L,
+                downloadBytesPerSecond = 0L,
+            )
+        } else {
+            _status.value = _status.value.copy(
+                uploadBytesPerSecond = 0L,
+                downloadBytesPerSecond = 0L,
             )
         }
         log("Tunnel terputus.")
@@ -257,12 +277,22 @@ object TunnelManager {
     private fun startStatsPolling() {
         statsJob?.cancel()
         statsJob = scope.launch {
+            var previousSampleAt = SystemClock.elapsedRealtime()
             while (isActive) {
+                delay(1_000)
+                if (!isActive) break
+                val sampleAt = SystemClock.elapsedRealtime()
+                val elapsedMillis = (sampleAt - previousSampleAt).coerceAtLeast(1L)
+                previousSampleAt = sampleAt
                 val delta = readStatsOnce()
                 if (!isActive) break
                 val total = trafficTotals.add(delta.first, delta.second)
-                _status.value = _status.value.copy(upBytes = total.first, downBytes = total.second)
-                delay(1000)
+                _status.value = _status.value.copy(
+                    upBytes = total.first,
+                    downBytes = total.second,
+                    uploadBytesPerSecond = TrafficSpeed.bytesPerSecond(delta.first, elapsedMillis),
+                    downloadBytesPerSecond = TrafficSpeed.bytesPerSecond(delta.second, elapsedMillis),
+                )
             }
         }
     }

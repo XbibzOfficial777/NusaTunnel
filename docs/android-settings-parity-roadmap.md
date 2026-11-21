@@ -76,8 +76,8 @@ See the matrix for exact screenshot filenames, each distinct visible item, curre
 
 ### Phase 6 — remaining General, Connection, UDP and diagnostics
 
-- The numeric log-entry cap (100–10,000) with Reset/Cancel/Save, persistent preference, and actual entry-based buffer trimming is implemented on `main`; JVM and KVM coverage passed in post-merge run 44889231145. Remaining General preferences (language/theme/dynamic color, speed unit), payload buffers/load balancing and SOCKS/BadVPN/UDPGW choices still need real consumers before exposure.
-- Implement per-app VPN, connection-check URL/interval/timeout/attempt/stop policy, richer Auto Ping, connection properties/reconnect limits, Share Net local HTTP proxy/authentication/reach modes, and UDP Custom parameters. Validate lifecycle, port conflicts, credential protection, no-leak behavior and observable status.
+- The numeric log-entry cap (100–10,000) with Reset/Cancel/Save, persistent preference, and actual entry-based buffer trimming is implemented on `main`; JVM and KVM coverage passed in post-merge run 44889231145. PR #3 implements persisted Byte/s versus bit/s selection backed by measured Xray counter deltas and live Beranda rates; JVM/KVM checks passed in run 44891577574. Language/theme/dynamic color, payload buffers/load balancing and BadVPN/UDPGW choices still need real consumers before exposure.
+- PR #3 adds persisted per-app VPN modes and a searchable launchable-app picker wired into `VpnService.Builder`; JVM policy tests and KVM selection/persistence/recreation checks passed in run 44893277188. Still required before claiming end-to-end routing: controlled traffic assertions for included and excluded apps plus reconnect behavior. Implement the remaining connection-check URL/interval/timeout/attempt/stop policy, richer Auto Ping, connection properties/reconnect limits, Share Net local HTTP proxy/authentication/reach modes, and UDP Custom parameters. Validate lifecycle, port conflicts, credential protection, no-leak behavior and observable status.
 - Implement the response checker for HTTP/SNI/UDP/DNS with direct/manual proxy, custom headers/body, cancellation and structured results. Verify each mode against controlled services.
 - Hardware ID/Access ID: keep the reference row explicitly blocked until the product owner supplies or approves the authorization endpoint, request/response contract, identity lifetime and privacy policy. Never make “Get ID” report success against a fake/local-only service.
 - Use emulator instrumentation plus controlled test services for app-level behavior; mark hotspot, physical routing, battery and Android system-settings behavior as device-only until a real device check is completed.
@@ -93,7 +93,7 @@ See the matrix for exact screenshot filenames, each distinct visible item, curre
 
 On `main`, Android has VMess, VLESS, Trojan and Shadowsocks through Xray; Hev and Xray-native TUN choices; a validated/persisted local SOCKS port; Xray sniffing; engine log level and the tested 100–10,000 numeric in-memory log cap; limited foreground/offline Auto Ping; and persisted VPN DNS/MTU consumed by Android/Xray/Hev on the next connection. Post-merge CI run 44889231145 passed. Exact caveats and test boundaries are in `android-support-matrix.md`.
 
-SSH, HCR, SlowDNS, OpenVPN, Psiphon, BadVPN/UDPGW, Share Net, advanced per-app/recovery/routing controls, response checking, and the remaining screenshot features are **not yet fully implemented**. Do not expose unsupported options as working controls.
+Per-app VPN policy selection is now wired to Android's allow/disallow application builder rules, but included/excluded app traffic still needs controlled end-to-end verification. SSH, HCR, SlowDNS, OpenVPN, Psiphon, BadVPN/UDPGW, Share Net, recovery/routing controls, response checking, and the remaining screenshot features are **not yet fully implemented**. Do not expose unsupported options as working controls.
 
 ## Size baseline
 

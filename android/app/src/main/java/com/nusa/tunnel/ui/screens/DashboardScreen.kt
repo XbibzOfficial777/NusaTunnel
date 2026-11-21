@@ -40,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.nusa.tunnel.core.SpeedUnit
+import com.nusa.tunnel.core.TrafficSpeed
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelState
 import com.nusa.tunnel.ui.components.GlassCard
@@ -56,6 +58,7 @@ import com.nusa.tunnel.ui.theme.Spruce
 @Composable
 fun DashboardScreen(
     serverName: String,
+    speedUnit: SpeedUnit,
     onToggle: () -> Unit,
 ) {
     val status by TunnelManager.status.collectAsState()
@@ -141,11 +144,13 @@ fun DashboardScreen(
                         icon = { Icon(Icons.Rounded.ArrowUpward, null, tint = Mint) },
                         label = "UNGGAH",
                         value = TunnelManager.fmtBytes(status.upBytes),
+                        liveSpeed = TrafficSpeed.format(status.uploadBytesPerSecond, speedUnit),
                     )
                     TrafficStat(
                         icon = { Icon(Icons.Rounded.ArrowDownward, null, tint = Spruce) },
                         label = "UNDUH",
                         value = TunnelManager.fmtBytes(status.downBytes),
+                        liveSpeed = TrafficSpeed.format(status.downloadBytesPerSecond, speedUnit),
                     )
                 }
             }
@@ -197,6 +202,7 @@ private fun TrafficStat(
     icon: @Composable () -> Unit,
     label: String,
     value: String,
+    liveSpeed: String,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -210,5 +216,7 @@ private fun TrafficStat(
         }
         Spacer(Modifier.height(2.dp))
         Text(label, style = MaterialTheme.typography.bodySmall, color = FrostFaint)
+        Spacer(Modifier.height(4.dp))
+        Text(liveSpeed, style = MaterialTheme.typography.labelSmall, color = FrostDim)
     }
 }

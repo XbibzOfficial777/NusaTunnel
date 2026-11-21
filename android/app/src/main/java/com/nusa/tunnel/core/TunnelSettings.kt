@@ -64,6 +64,10 @@ object TunnelSettings {
     private const val KEY_VPN_PRIMARY_DNS = "vpn_primary_dns"
     private const val KEY_VPN_FALLBACK_DNS = "vpn_fallback_dns"
     private const val KEY_VPN_MTU = "vpn_mtu"
+    private const val KEY_SPEED_UNIT = "traffic_speed_unit"
+    private const val KEY_VPN_APP_MODE = "vpn_app_routing_mode"
+    private const val KEY_VPN_APP_PACKAGES = "vpn_app_selected_packages"
+    const val MAX_SELECTED_VPN_APPS = 500
 
     fun parseSocksPort(value: String): Int? =
         value.trim().toIntOrNull()?.takeIf { it in 1..65_535 }
@@ -163,6 +167,38 @@ object TunnelSettings {
 
     private fun normalizeLogEntryLimit(limit: Int): Int =
         limit.coerceIn(MIN_LOG_ENTRY_LIMIT, MAX_LOG_ENTRY_LIMIT)
+
+    fun vpnAppRouting(context: Context): VpnAppRoutingSettings {
+        val preferences = prefs(context)
+        val mode = VpnAppRoutingMode.fromPreference(
+            preferences.getString(KEY_VPN_APP_MODE, null),
+        )
+        val packages = preferences.getStringSet(KEY_VPN_APP_PACKAGES, emptySet())
+            ?.toSet()
+            .orEmpty()
+        return VpnAppRoutingSettings(mode, packages)
+    }
+
+    /** Persists only a bounded, syntactically valid package selection. */
+    fun setVpnAppRouting(context: Context, settings: VpnAppRoutingSettings): Boolean {
+        if (settings.selectedPackages.size > MAX_SELECTED_VPN_APPS ||
+            settings.selectedPackages.any { !VpnAppRoutingPlanner.isValidPackageName(it) } ||
+            context.applicationContext.packageName in settings.selectedPackages ||
+            (settings.mode == VpnAppRoutingMode.SelectedOnly && settings.selectedPackages.isEmpty())
+        ) return false
+        prefs(context).edit()
+            .putString(KEY_VPN_APP_MODE, settings.mode.preferenceValue)
+            .putStringSet(KEY_VPN_APP_PACKAGES, settings.selectedPackages.toSet())
+            .apply()
+        return true
+    }
+
+    fun speedUnit(context: Context): SpeedUnit =
+        SpeedUnit.fromPreference(prefs(context).getString(KEY_SPEED_UNIT, null))
+
+    fun setSpeedUnit(context: Context, unit: SpeedUnit) {
+        prefs(context).edit().putString(KEY_SPEED_UNIT, unit.preferenceValue).apply()
+    }
 
     fun autoPingEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_AUTO_PING, false)
