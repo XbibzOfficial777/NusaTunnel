@@ -103,6 +103,25 @@ class SettingsKvmInstrumentedTest {
     }
 
     @Test
+    fun keepCpuAwakeSettingPersistsAcrossActivityRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val original = TunnelSettings.keepCpuAwake(context)
+        try {
+            TunnelSettings.setKeepCpuAwake(context, false)
+
+            compose.onNodeWithText("Atur").performClick()
+            compose.onNodeWithTag("keep_cpu_awake_switch").performScrollTo().performClick()
+            assertTrue(TunnelSettings.keepCpuAwake(context))
+
+            compose.activityRule.scenario.recreate()
+            compose.waitForIdle()
+            compose.onNodeWithTag("keep_cpu_awake_switch").performScrollTo().assertIsOn()
+        } finally {
+            TunnelSettings.setKeepCpuAwake(context, original)
+        }
+    }
+
+    @Test
     fun perAppVpnAllowlistPersistsAndIsAppliedToTheEditorAfterRecreation() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val original = TunnelSettings.vpnAppRouting(context)

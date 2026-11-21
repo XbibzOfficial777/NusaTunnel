@@ -67,6 +67,7 @@ object TunnelSettings {
     private const val KEY_SPEED_UNIT = "traffic_speed_unit"
     private const val KEY_VPN_APP_MODE = "vpn_app_routing_mode"
     private const val KEY_VPN_APP_PACKAGES = "vpn_app_selected_packages"
+    private const val KEY_KEEP_CPU_AWAKE = "keep_cpu_awake_while_vpn_active"
     const val MAX_SELECTED_VPN_APPS = 500
 
     fun parseSocksPort(value: String): Int? =
@@ -191,6 +192,13 @@ object TunnelSettings {
             .putStringSet(KEY_VPN_APP_PACKAGES, settings.selectedPackages.toSet())
             .apply()
         return true
+    }
+
+    fun keepCpuAwake(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_KEEP_CPU_AWAKE, false)
+
+    fun setKeepCpuAwake(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_KEEP_CPU_AWAKE, enabled).apply()
     }
 
     fun speedUnit(context: Context): SpeedUnit =

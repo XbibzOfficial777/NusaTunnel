@@ -89,6 +89,10 @@ fun SettingsScreen(
     onSpeedUnit: (SpeedUnit) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
+    keepCpuAwake: Boolean,
+    onKeepCpuAwake: (Boolean) -> Unit,
+    onOpenBatterySettings: () -> Unit,
+    onOpenAlwaysOnVpnSettings: () -> Unit,
     vpnBehavior: VpnBehaviorSettings,
     onVpnBehavior: (VpnBehaviorSettings) -> Unit,
     vpnAppRouting: VpnAppRoutingSettings,
@@ -180,6 +184,26 @@ fun SettingsScreen(
                         summary = "Ping server terpilih setiap lima menit hanya saat aplikasi terlihat dan VPN terputus.",
                         checked = autoPing,
                         onCheckedChange = onAutoPing,
+                    )
+                    SettingsDivider()
+                    SwitchRow(
+                        title = "Keep CPU awake",
+                        summary = "Gunakan Android PARTIAL_WAKE_LOCK hanya selama interface VPN aktif; langsung diperbarui saat terhubung dan dilepas saat disconnect.",
+                        checked = keepCpuAwake,
+                        onCheckedChange = onKeepCpuAwake,
+                        testTag = "keep_cpu_awake_switch",
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        title = "Battery usage",
+                        summary = "Buka info aplikasi Android; kontrol baterai yang tersedia bergantung pada perangkat.",
+                        onClick = onOpenBatterySettings,
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        title = "Always-on VPN",
+                        summary = "Buka daftar VPN Android; Always-on dan lockdown bergantung pada versi perangkat.",
+                        onClick = onOpenAlwaysOnVpnSettings,
                     )
                 }
                 Spacer(Modifier.height(16.dp))
@@ -679,6 +703,7 @@ private fun SwitchRow(
     summary: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    testTag: String? = null,
 ) {
     Row(
         Modifier
@@ -694,6 +719,7 @@ private fun SwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            modifier = testTag?.let { Modifier.testTag(it) } ?: Modifier,
             colors = SwitchDefaults.colors(
                 checkedTrackColor = Spruce,
                 checkedThumbColor = Color(0xFF07131F),
