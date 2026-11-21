@@ -1,11 +1,10 @@
-#!/bin/bash
-# Buat keystore rilis NusaTunnel (self-signed, milik Xbibz Official)
-set -e
-cd "$(dirname "$0")"
-if [ ! -f nusatunnel.keystore ]; then
-  /usr/lib/jvm/java-21-openjdk-amd64/bin/keytool -genkeypair -v \
-    -keystore nusatunnel.keystore -alias nusatunnel \
-    -keyalg RSA -keysize 2048 -validity 10950 \
-    -storepass nusatunnel2026 -keypass nusatunnel2026 \
-    -dname "CN=NusaTunnel, OU=Xbibz Official, O=Xbibz Official, L=Jakarta, C=ID"
-fi
+#!/usr/bin/env bash
+set -euo pipefail
+cat <<'MESSAGE'
+The legacy release-keystore generator is disabled. It embedded an obsolete password and wrote
+signing material into the repository tree. Do not reuse that signing identity.
+
+Generate a new PKCS#12 keystore outside the repository and follow:
+  docs/android-release-readiness.md
+MESSAGE
+exit 1

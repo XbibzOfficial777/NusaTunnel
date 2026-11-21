@@ -1,6 +1,9 @@
 .gradle/
 build/
 local.properties
+# Production signing material must never be committed.
 nusatunnel.keystore
+nusatunnel-release.p12
+*.jks
 *.apk
 *.aab

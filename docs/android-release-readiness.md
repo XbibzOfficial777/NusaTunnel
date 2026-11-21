@@ -1,0 +1,51 @@
+# Android release readiness gate
+
+**Status: BLOCKED — not a release candidate.** This checklist separates release-pipeline hardening from the Android feature-parity work. Passing the pipeline does not mean all 38 reference screenshots or `BACA.TXT` are implemented; use `android-settings-parity-roadmap.md` and `http-custom-reference-matrix.md` for that scope.
+
+## Signing-key security incident and rotation
+
+The GitHub repository is public, and an Android signing keystore was tracked in its history while its password was embedded in Gradle/workflow configuration. Treat that signing identity as compromised. Removing the file from the current tree does **not** erase it from existing Git commits, clones, caches, or prior releases. Do not use it for another public release. History cleanup is a separate coordinated operation and has not been performed.
+
+The user approved key rotation. This repository change removes the old keystore from the current tree and changes release signing to require a new private keystore injected from protected GitHub Actions secrets. No new private key was generated or saved in this workspace.
+
+Before any release:
+
+1. On a trusted machine, generate a new PKCS#12 keystore **outside the repository**. Keep a protected offline backup. For example:
+
+   ```sh
+   umask 077
+   mkdir -p "$HOME/.config/nusatunnel"
+   keytool -genkeypair -alias nusatunnel -keyalg RSA -keysize 3072 \
+     -validity 10000 -storetype PKCS12 \
+     -keystore "$HOME/.config/nusatunnel/nusatunnel-release.p12" \
+     -dname "CN=Xbibz Official, OU=NusaTunnel, O=Xbibz Official, C=ID"
+   ```
+
+   Let `keytool` prompt for the password; do not put it in shell history. Use the same password for the store and key with PKCS#12.
+
+2. In the repository's **Settings → Secrets and variables → Actions**, create secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. `ANDROID_KEYSTORE_BASE64` is the single-line Base64 of the new `.p12`; do not paste any private material into an issue, commit, or chat. For PKCS#12, set the store and key passwords to the password chosen above.
+3. Create repository variable `ANDROID_KEY_CERT_SHA256` from the new certificate's SHA-256 fingerprint (`keytool -list -v ...`). This public fingerprint is checked against every release APK.
+4. Decide and test migration for current v2.2.5 installs. A fresh key is not accepted as an in-place update of APKs signed by the old key without a supported signing lineage. A clean reinstall can erase app data; no tested export/restore path is evidenced yet. Do not publish until data migration/backup and the user notice are implemented, tested, and approved.
+5. Increment `versionCode`/`versionName` and add matching `docs/release-notes-v<VERSION>.md`; do not retag or overwrite an existing release.
+
+## Pipeline gates
+
+The hardened workflow in `.github/workflows/android-release.yml` is intended to:
+
+- run only for a pushed `v*` tag;
+- require the tag to match the app version, point exactly at current `main`, have matching release notes, and have a successful `Android CI` push run for that exact commit;
+- run JVM/config validation and KVM UI instrumentation, failing closed if `/dev/kvm` is unavailable;
+- require the new keystore secrets, verify that the keystore/alias can be opened, and reject a checked-in keystore;
+- verify every produced APK against `ANDROID_KEY_CERT_SHA256`;
+- create a **draft**, not a public release, after all jobs pass. A maintainer must review the draft, test assets/install/update behavior and explicitly publish it.
+
+Normal Android CI builds may use the debug signing key only to prove that the release variant assembles; those CI APKs are not publishable. The release workflow must never fall back to that key or the exposed key.
+
+## Remaining release blockers
+
+- The new private keystore and certificate fingerprint have not been provisioned in GitHub Settings; the release workflow must fail closed until they are.
+- The old private key remains present in public Git history. The current tree is being cleaned; history purge/revocation and distribution-channel notice need owner coordination.
+- Existing-install migration/data backup has not been implemented or tested for a signing-key change.
+- The feature ledger is still partial: SSH/HCR, SlowDNS, complete Xray profile/routing editors, OpenVPN, Psiphon, Share Net, response checker, and additional screenshot controls remain incomplete. A green build does not clear those parity blockers.
+- Live Xray/VpnService TUN traffic assertions and physical-device behavior remain unverified. No release may claim these are verified.
+- Remote GitHub Actions must pass for the final commit and draft release. Do not build/test the Android app in the local sandbox, and do not push a release tag or publish until all required checks and user-facing migration steps are ready.
