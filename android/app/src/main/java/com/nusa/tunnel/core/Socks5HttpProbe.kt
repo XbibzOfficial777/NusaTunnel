@@ -34,6 +34,7 @@ object Socks5HttpProbe {
     private const val MAX_URL_LENGTH = 2_048
     private const val MAX_HEADER_BYTES = 64 * 1024
     private const val MAX_HEADER_LINES = 128
+    private val STATUS_LINE = Regex("HTTP/1\\.[01] ([1-5][0-9]{2})(?: .*)?")
     private val timeoutScheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "nusa-connection-check-timeout").apply { isDaemon = true }
     }
@@ -281,7 +282,4 @@ object Socks5HttpProbe {
         }
     }
 
-    private companion object {
-        val STATUS_LINE = Regex("HTTP/1\\.[01] ([1-5][0-9]{2})(?: .*)?")
-    }
 }
