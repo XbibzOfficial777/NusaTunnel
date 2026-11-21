@@ -386,3 +386,21 @@ macOS Intel 20MB, Android universal APK 180MB.
   dex berisi kelas app + binding libv2ray, 4 ABI native-code
 
 **Upload catbox gagal** (IP datacenter diblok "Invalid uploader", x0.at banned) → GitHub Releases jadi kanal utama.
+
+### Per-arsitektur Android (v2.2.0, sesi lanjutan)
+
+**Tambah 4 APK per-ABI** di release (splits abi di build.gradle.kts, isUniversalApk=false):
+
+| Asset | Ukuran | md5 |
+|---|---|---|
+| NusaTunnel-2.2.0-android-arm64-v8a.apk | 74 MB | a55b54c75af959ebf2e1fe0f998f07ac |
+| NusaTunnel-2.2.0-android-armeabi-v7a.apk | 73 MB | 088ba47e739e5b8974cf7e2e7413bdea |
+| NusaTunnel-2.2.0-android-x86.apk | 73 MB | ca0412208f0de95dba28af4511b86e75 |
+| NusaTunnel-2.2.0-android-x86_64.apk | 76 MB | 8e24743675683667e1e035863f5a5b4e |
+
+- Tiap APK berisi tepat 1 `libgojni.so` sesuai ABI (diverifikasi unzip -l)
+- Semua signed V2 keystore rilis (SHA-256 cert cd459527...52b016)
+- BANTEX: arm64-v8a diunduh balik dari GitHub, md5 cocok persis
+- Disk sandbox penuh saat build (100%) → dibersihkan: zip ter-extract, tree build v2.1 lama
+  (deb210/macpkg21/winpkg21), APK universal lokal (masih ada di release)
+- APK universal (171 MB) tetap tersedia di release untuk yang mau satu file semua-device
