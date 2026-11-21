@@ -18,6 +18,10 @@ val hasNusaReleaseSigning = listOf(
     nusaSigningKeyAlias,
     nusaSigningKeyPassword,
 ).all { !it.isNullOrBlank() }
+val requiresNusaReleaseSigning = System.getenv("NUSATUNNEL_REQUIRE_RELEASE_SIGNING") == "true"
+require(!requiresNusaReleaseSigning || hasNusaReleaseSigning) {
+    "Production signing was required, but one or more NusaTunnel signing values are missing."
+}
 
 android {
     namespace = "com.nusa.tunnel"
@@ -45,6 +49,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasNusaReleaseSigning) {
+            create("nusa") {
+                storeFile = file(nusaSigningStoreFile!!)
+                storePassword = nusaSigningStorePassword
+                keyAlias = nusaSigningKeyAlias
+                keyPassword = nusaSigningKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -61,12 +76,7 @@ android {
             isMinifyEnabled = false      // build pertama tanpa R8 utk keandalan engine gobind
             isShrinkResources = false
             signingConfig = if (hasNusaReleaseSigning) {
-                signingConfigs.findByName("nusa") ?: signingConfigs.create("nusa") {
-                    storeFile = file(nusaSigningStoreFile!!)
-                    storePassword = nusaSigningStorePassword
-                    keyAlias = nusaSigningKeyAlias
-                    keyPassword = nusaSigningKeyPassword
-                }
+                signingConfigs.getByName("nusa")
             } else {
                 // Deliberately not a release identity. Android CI can verify assembly
                 // without possessing the protected production keystore.
