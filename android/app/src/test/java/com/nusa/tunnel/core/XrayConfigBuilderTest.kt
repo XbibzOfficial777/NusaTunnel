@@ -166,8 +166,7 @@ class XrayConfigBuilderTest {
 
     @Test
     fun `vless reality - emits realitySettings and never tlsSettings`() {
-        val stream = build(vlessReality)["outbounds"]!!.jsonArray[0].jsonObject
-            ["streamSettings"]!!.jsonObject
+        val stream = build(vlessReality)["outbounds"]!!.jsonArray[0].jsonObject["streamSettings"]!!.jsonObject
         assertEquals("reality", (stream["security"] as JsonPrimitive).content)
         assertFalse(stream.containsKey("tlsSettings"))
         val reality = stream["realitySettings"]!!.jsonObject
@@ -180,25 +179,24 @@ class XrayConfigBuilderTest {
 
     @Test
     fun `trojan reality - emits reality client settings`() {
-        val stream = build(trojanReality)["outbounds"]!!.jsonArray[0].jsonObject
-            ["streamSettings"]!!.jsonObject
+        val stream = build(trojanReality)["outbounds"]!!.jsonArray[0].jsonObject["streamSettings"]!!.jsonObject
         assertEquals("reality", (stream["security"] as JsonPrimitive).content)
         assertFalse(stream.containsKey("tlsSettings"))
-        assertEquals(realityKey, (stream["realitySettings"]!!.jsonObject
-            ["publicKey"] as JsonPrimitive).content)
+        val reality = stream["realitySettings"]!!.jsonObject
+        assertEquals(realityKey, (reality["publicKey"] as JsonPrimitive).content)
     }
 
     @Test
     fun `xhttp reality - emits path host mode and extra JSON`() {
-        val stream = build(vlessXhttpReality)["outbounds"]!!.jsonArray[0].jsonObject
-            ["streamSettings"]!!.jsonObject
+        val stream = build(vlessXhttpReality)["outbounds"]!!.jsonArray[0].jsonObject["streamSettings"]!!.jsonObject
         val xhttp = stream["xhttpSettings"]!!.jsonObject
         assertEquals("/edge", (xhttp["path"] as JsonPrimitive).content)
         assertEquals("front.example.com", (xhttp["host"] as JsonPrimitive).content)
         assertEquals("stream-up", (xhttp["mode"] as JsonPrimitive).content)
-        assertEquals("100-1000", (xhttp["extra"]!!.jsonObject["xPaddingBytes"] as JsonPrimitive).content)
-        assertEquals(1, (xhttp["extra"]!!.jsonObject["xmux"]!!.jsonObject
-            ["maxConnections"] as JsonPrimitive).content.toInt())
+        val extra = xhttp["extra"]!!.jsonObject
+        assertEquals("100-1000", (extra["xPaddingBytes"] as JsonPrimitive).content)
+        val xmux = extra["xmux"]!!.jsonObject
+        assertEquals(1, (xmux["maxConnections"] as JsonPrimitive).content.toInt())
     }
 
     @Test
@@ -211,20 +209,18 @@ class XrayConfigBuilderTest {
         val xhttp = stream["xhttpSettings"]!!.jsonObject
         assertEquals("/trojan-edge", (xhttp["path"] as JsonPrimitive).content)
         assertEquals("stream-one", (xhttp["mode"] as JsonPrimitive).content)
-        assertEquals("100000-200000", (xhttp["extra"]!!.jsonObject
-            ["scMaxEachPostBytes"] as JsonPrimitive).content)
-        assertEquals(realityKey, (stream["realitySettings"]!!.jsonObject
-            ["publicKey"] as JsonPrimitive).content)
+        val extra = xhttp["extra"]!!.jsonObject
+        assertEquals("100000-200000", (extra["scMaxEachPostBytes"] as JsonPrimitive).content)
+        val reality = stream["realitySettings"]!!.jsonObject
+        assertEquals(realityKey, (reality["publicKey"] as JsonPrimitive).content)
     }
 
     @Test
     fun `httpupgrade - emits its transport settings`() {
-        val stream = build(vlessHttpUpgrade)["outbounds"]!!.jsonArray[0].jsonObject
-            ["streamSettings"]!!.jsonObject
-        assertEquals("/connect", (stream["httpupgradeSettings"]!!.jsonObject
-            ["path"] as JsonPrimitive).content)
-        assertEquals("cdn.example.com", (stream["httpupgradeSettings"]!!.jsonObject
-            ["host"] as JsonPrimitive).content)
+        val stream = build(vlessHttpUpgrade)["outbounds"]!!.jsonArray[0].jsonObject["streamSettings"]!!.jsonObject
+        val httpUpgrade = stream["httpupgradeSettings"]!!.jsonObject
+        assertEquals("/connect", (httpUpgrade["path"] as JsonPrimitive).content)
+        assertEquals("cdn.example.com", (httpUpgrade["host"] as JsonPrimitive).content)
     }
 
     @Test

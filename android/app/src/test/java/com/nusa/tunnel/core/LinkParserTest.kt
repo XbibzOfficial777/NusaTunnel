@@ -139,10 +139,10 @@ class LinkParserTest {
         """.trimIndent()
         val p = LinkParser.parseXrayConfig(config).single()
         assertEquals("h2,http/1.1", p.alpn)
-        val stream = kotlinx.serialization.json.Json.parseToJsonElement(
+        val root = kotlinx.serialization.json.Json.parseToJsonElement(
             XrayConfigBuilder.build(p, 10808)
-        ).jsonObject["outbounds"]!!.jsonArray[0].jsonObject
-            ["streamSettings"]!!.jsonObject
+        ).jsonObject
+        val stream = root["outbounds"]!!.jsonArray[0].jsonObject["streamSettings"]!!.jsonObject
         val alpn = stream["tlsSettings"]!!.jsonObject["alpn"]!!.jsonArray
         assertEquals(listOf("h2", "http/1.1"), alpn.map { it.jsonPrimitive.content })
     }
