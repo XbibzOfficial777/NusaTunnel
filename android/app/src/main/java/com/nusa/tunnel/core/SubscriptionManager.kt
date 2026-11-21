@@ -76,7 +76,8 @@ object SubscriptionManager {
                 val code = conn.responseCode
                 if (code in 300..399) {  // manual redirect utk http<->https mix
                     val loc = conn.getHeaderField("Location") ?: throw Exception("Redirect tanpa lokasi")
-                    current = if (loc.startsWith("http")) loc else URL(current, loc).toString()
+                    // konstruktor URL(URL, String): konteks harus objek URL, bukan String
+                    current = if (loc.startsWith("http")) loc else URL(URL(current), loc).toString()
                     if (++redirects > 5) throw Exception("Terlalu banyak redirect")
                     continue
                 }
