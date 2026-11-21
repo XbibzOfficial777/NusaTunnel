@@ -122,7 +122,7 @@ class LinkParserTest {
     @Test
     fun `parse ss link bentuk lama full base64`() {
         val full = b64("aes-128-gcm:pass123@old.example.com:1234")
-        val p = LinkParser.parse("ss://$full#Old")
+        val p = LinkParser.parse("ss://$full#Old")!!
         assertEquals(Proto.Shadowsocks, p.proto)
         assertEquals("old.example.com", p.host)
         assertEquals(1234, p.port)

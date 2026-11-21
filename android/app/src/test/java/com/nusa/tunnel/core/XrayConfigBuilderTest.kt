@@ -43,7 +43,7 @@ class XrayConfigBuilderTest {
     // ---------------------------------------------------------- regression bug lapangan
 
     @Test
-    fun `routing rule - outboundTag HARUS string bukan array (bug v2.2.0)`() {
+    fun `routing rule - outboundTag HARUS string bukan array (bug v220)`() {
         val rule = build(trojan)["routing"]!!.jsonObject["rules"]!!.jsonArray.single().jsonObject
         val tag = rule["outboundTag"] as? kotlinx.serialization.json.JsonPrimitive
             ?: error("outboundTag harus string, dapat: ${rule["outboundTag\"]}")
@@ -51,7 +51,7 @@ class XrayConfigBuilderTest {
     }
 
     @Test
-    fun `routing rule - port HARUS string range bukan array (bug v2.2.0)`() {
+    fun `routing rule - port HARUS string range bukan array (bug v220)`() {
         val rule = build(trojan)["routing"]!!.jsonObject["rules"]!!.jsonArray.single().jsonObject
         val port = rule["port"] as? kotlinx.serialization.json.JsonPrimitive
             ?: error("port harus JsonPrimitive string, dapat: ${rule["port"]}")
@@ -59,13 +59,13 @@ class XrayConfigBuilderTest {
     }
 
     @Test
-    fun `routing rule - tidak ada balancerTag kosong (bug v2.2.0)`() {
+    fun `routing rule - tidak ada balancerTag kosong (bug v220)`() {
         val rule = build(trojan)["routing"]!!.jsonObject["rules"]!!.jsonArray.single().jsonObject
         assertFalse(rule.containsKey("balancerTag"))
     }
 
     @Test
-    fun `trojan - password di level server BUKAN di users (bug v2.2.1)`() {
+    fun `trojan - password di level server BUKAN di users (bug v221)`() {
         val ob = build(trojan)["outbounds"]!!.jsonArray[0].jsonObject
         assertEquals("trojan", (ob["protocol"] as kotlinx.serialization.json.JsonPrimitive).content)
         val servers = ob["settings"]!!.jsonObject["servers"]!!.jsonArray
