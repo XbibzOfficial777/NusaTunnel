@@ -51,8 +51,8 @@ object TunnelManager {
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
-
-    @Volatile private var maxLogEntries = LogRetention.Standard.preferenceValue
+    private val logStateLock = Any()
+    private val logHistory = LogHistoryBuffer(TunnelSettings.DEFAULT_LOG_ENTRY_LIMIT)
 
     @Volatile var currentProfile: ServerProfile? = null
         private set
@@ -75,15 +75,22 @@ object TunnelManager {
         Log.d(TAG, line)
         val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date())
-        _logs.value = (_logs.value + "[$stamp] $line").takeLast(maxLogEntries)
+        synchronized(logStateLock) {
+            _logs.value = logHistory.append("[$stamp] $line")
+        }
     }
 
-    fun clearLogs() { _logs.value = emptyList() }
+    fun clearLogs() {
+        synchronized(logStateLock) {
+            _logs.value = logHistory.clear()
+        }
+    }
 
-    /** Applies a user-selected in-memory history limit and trims older entries immediately. */
-    fun setLogRetention(retention: LogRetention) {
-        maxLogEntries = retention.preferenceValue
-        _logs.value = _logs.value.takeLast(retention.preferenceValue)
+    /** Applies a bounded in-memory history limit and trims older entries immediately. */
+    fun setLogEntryLimit(limit: Int) {
+        synchronized(logStateLock) {
+            _logs.value = logHistory.setLimit(limit)
+        }
     }
 
     fun engineVersion(): String = runCatching { Libv2ray.checkVersionX() }
@@ -91,7 +98,7 @@ object TunnelManager {
 
     /** Harus dipanggil sekali dari Application.onCreate. */
     fun initEngine(context: Context) {
-        setLogRetention(TunnelSettings.logRetention(context))
+        setLogEntryLimit(TunnelSettings.logEntryLimit(context))
         runCatching {
             Seq.setContext(context.applicationContext)
             val files = context.filesDir.absolutePath

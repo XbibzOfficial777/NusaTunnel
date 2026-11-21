@@ -1,5 +1,6 @@
 package com.nusa.tunnel
 
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -43,6 +44,32 @@ class SettingsKvmInstrumentedTest {
             VpnBehaviorSettings("9.9.9.9", "1.0.0.1", 1420),
             TunnelSettings.vpnBehavior(context),
         )
+    }
+
+    @Test
+    fun logEntryLimitEditorPersistsResetAndRejectsInvalidValues() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        compose.onNodeWithText("Atur").performClick()
+
+        compose.onNodeWithTag("log_entry_limit_row").performScrollTo().performClick()
+        compose.onNodeWithTag("log_entry_limit_input").performTextReplacement("250")
+        compose.onNodeWithTag("save_log_entry_limit").performClick()
+        assertEquals(250, TunnelSettings.logEntryLimit(context))
+
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithText("250 entries · older entries are trimmed immediately").assertExists()
+
+        compose.onNodeWithTag("log_entry_limit_row").performScrollTo().performClick()
+        compose.onNodeWithTag("log_entry_limit_input").performTextReplacement("99")
+        compose.onNodeWithTag("save_log_entry_limit").assertIsNotEnabled()
+        compose.onNodeWithTag("cancel_log_entry_limit").performClick()
+        assertEquals(250, TunnelSettings.logEntryLimit(context))
+
+        compose.onNodeWithTag("log_entry_limit_row").performScrollTo().performClick()
+        compose.onNodeWithTag("reset_log_entry_limit").performClick()
+        compose.onNodeWithTag("save_log_entry_limit").performClick()
+        assertEquals(TunnelSettings.DEFAULT_LOG_ENTRY_LIMIT, TunnelSettings.logEntryLimit(context))
     }
 
     @Test

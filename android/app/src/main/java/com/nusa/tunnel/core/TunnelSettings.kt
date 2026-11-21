@@ -30,18 +30,6 @@ enum class EngineLogLevel(
     }
 }
 
-/** Number of in-memory log entries retained by the app. */
-enum class LogRetention(val preferenceValue: Int, val label: String) {
-    Compact(100, "100 baris"),
-    Standard(400, "400 baris"),
-    Extended(1_000, "1.000 baris");
-
-    companion object {
-        fun fromPreference(value: Int): LogRetention =
-            entries.firstOrNull { it.preferenceValue == value } ?: Standard
-    }
-}
-
 /** Settings consumed by Android VpnService and the active Xray/Hev packet path. */
 data class VpnBehaviorSettings(
     val primaryDns: String = DEFAULT_PRIMARY_DNS,
@@ -62,6 +50,9 @@ data class VpnBehaviorSettings(
 /** Persisted app settings shared by the Compose UI and the VPN service. */
 object TunnelSettings {
     const val DEFAULT_SOCKS_PORT = 10808
+    const val MIN_LOG_ENTRY_LIMIT = 100
+    const val DEFAULT_LOG_ENTRY_LIMIT = 1_000
+    const val MAX_LOG_ENTRY_LIMIT = 10_000
 
     private const val PREFS = "nusatunnel_prefs"
     private const val KEY_UDP_ENGINE = "udp_tunnel_engine"
@@ -155,14 +146,23 @@ object TunnelSettings {
         prefs(context).edit().putString(KEY_LOG_LEVEL, level.preferenceValue).apply()
     }
 
-    fun logRetention(context: Context): LogRetention =
-        LogRetention.fromPreference(
-            prefs(context).getInt(KEY_LOG_RETENTION, LogRetention.Standard.preferenceValue),
+    fun logEntryLimit(context: Context): Int =
+        normalizeLogEntryLimit(
+            prefs(context).getInt(KEY_LOG_RETENTION, DEFAULT_LOG_ENTRY_LIMIT),
         )
 
-    fun setLogRetention(context: Context, retention: LogRetention) {
-        prefs(context).edit().putInt(KEY_LOG_RETENTION, retention.preferenceValue).apply()
+    fun setLogEntryLimit(context: Context, limit: Int): Boolean {
+        val normalized = normalizeLogEntryLimit(limit)
+        if (normalized != limit) return false
+        prefs(context).edit().putInt(KEY_LOG_RETENTION, normalized).apply()
+        return true
     }
+
+    fun parseLogEntryLimit(raw: String): Int? =
+        raw.trim().toIntOrNull()?.takeIf { it in MIN_LOG_ENTRY_LIMIT..MAX_LOG_ENTRY_LIMIT }
+
+    private fun normalizeLogEntryLimit(limit: Int): Int =
+        limit.coerceIn(MIN_LOG_ENTRY_LIMIT, MAX_LOG_ENTRY_LIMIT)
 
     fun autoPingEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_AUTO_PING, false)

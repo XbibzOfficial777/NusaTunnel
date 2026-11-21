@@ -22,7 +22,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LinkParser
-import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.ServerStore
 import com.nusa.tunnel.core.SmartImporter
 import com.nusa.tunnel.core.SubscriptionManager
@@ -85,8 +84,8 @@ class MainActivity : ComponentActivity() {
                 var logLevel by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.logLevel(this@MainActivity))
                 }
-                var logRetention by androidx.compose.runtime.remember {
-                    mutableStateOf(TunnelSettings.logRetention(this@MainActivity))
+                var logEntryLimit by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.logEntryLimit(this@MainActivity))
                 }
                 var autoPing by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.autoPingEnabled(this@MainActivity))
@@ -208,11 +207,12 @@ class MainActivity : ComponentActivity() {
                         logLevel = it
                         TunnelSettings.setLogLevel(this@MainActivity, it)
                     },
-                    logRetention = logRetention,
-                    onLogRetention = { retention ->
-                        logRetention = retention
-                        TunnelSettings.setLogRetention(this@MainActivity, retention)
-                        TunnelManager.setLogRetention(retention)
+                    logEntryLimit = logEntryLimit,
+                    onLogEntryLimit = { limit ->
+                        if (TunnelSettings.setLogEntryLimit(this@MainActivity, limit)) {
+                            logEntryLimit = limit
+                            TunnelManager.setLogEntryLimit(limit)
+                        }
                     },
                     autoPing = autoPing,
                     onAutoPing = {
