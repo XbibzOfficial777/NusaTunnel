@@ -16,6 +16,7 @@ Audit date: 2026-11-21. This matrix describes the Android app only. The full scr
 | SOCKS5 port | Persists and validates ports 1–65,535; rejects invalid input before connecting and applies the saved port on the next connection. |
 | Destination sniffing | Persists the switch and passes it into generated Xray config for active inbounds; changes apply on the next connection. This does not implement the full V2Ray routing-only/rules UI. |
 | VPN DNS and MTU | Persists two numeric IPv4 DNS servers and MTU (1280–9000); Android `VpnService.Builder`, Xray TUN config, and Hev config consume the saved values on the next connection. Unit/config generation tests passed in merged CI; KVM run [44885399758](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44885399758) passed the DNS/MTU UI persistence and invalid-input instrumentation cases on x86_64 Android. This does not establish live DNS, VPN routing, or leak behavior. |
+| Per-app VPN | Persists “all apps”, “only selected”, and “all except selected” package policies; the active policy is translated to Android `VpnService.Builder` allow/disallow calls, always excluding NusaTunnel to avoid VPN recursion. JVM planner tests and KVM editor/persistence/recreation tests passed in PR #3 run [44893277188](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44893277188). Controlled included/excluded app traffic has not yet been verified, so end-to-end routing is not claimed. |
 | IPv6 route | IPv6 remains routed through the VPN. There is deliberately no off switch yet because that could leak IPv6 outside the tunnel until a real packet-blocking path is validated. |
 | Auto Ping | Opt-in: pings the selected server every five minutes only while the app is foregrounded and the VPN is disconnected. It does not provide the reference's Keep-alive/Reset/Aggressive modes or advanced controls. |
 
@@ -30,7 +31,7 @@ Hev mode uses the Android VPN TUN fd in HevSocks5Tunnel and keeps Xray as a loca
 | OpenVPN | No OpenVPN core or `.ovpn` profile importer exists. |
 | Psiphon | No Psiphon SDK/core integration exists. |
 | BadVPN / UDPGW | No BadVPN engine or configurable UDPGW endpoint/port exists. |
-| Advanced connection behavior | Per-app VPN selection, connection-check scheduling, Auto Ping modes/recovery, richer reconnect properties, Share Net/local proxy, and associated controls are not implemented. |
+| Advanced connection behavior | Per-app VPN modes and package selection are implemented and wired to Android's `VpnService.Builder`; UI/persistence and policy tests pass, but selected-versus-excluded app traffic has not yet been verified. Connection-check scheduling, Auto Ping modes/recovery, richer reconnect properties, Share Net/local proxy, and associated controls remain unimplemented. |
 | Advanced V2Ray/Xray settings | Complete profile GUI/JSON editor, configurable routing rules/presets, custom DNS hosts, asset manager, and other screenshot options are not implemented as a complete feature set. |
 | UDP Custom tuning | Upload/download rate, receive window, idle timeout and Path MTU discovery controls are not implemented. |
 | Response checker | HTTP/SNI/UDP/DNS checks, manual proxy selection and custom headers/body are not implemented. |
