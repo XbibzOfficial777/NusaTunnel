@@ -16,6 +16,8 @@ import com.nusa.tunnel.core.HevConfigBuilder
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.UdpTunnelEngine
+import com.nusa.tunnel.core.VpnAppRoutingPlanner
+import com.nusa.tunnel.core.VpnApplicationCatalog
 import hev.htproxy.TProxyService
 import libv2ray.CoreController
 import libv2ray.Libv2ray
@@ -104,6 +106,20 @@ class TunnelVpnService : VpnService() {
                 if (cleanupStarted.get()) return@synchronized
                 closeInterface()
                 val vpnBehavior = TunnelSettings.vpnBehavior(this)
+                val ownerPackageName = this.packageName
+                val appRouting = TunnelSettings.vpnAppRouting(this)
+                val visiblePackages = VpnApplicationCatalog.launchableApps(this)
+                    .mapTo(mutableSetOf()) { it.packageName }
+                    .apply { add(ownerPackageName) }
+                val appPlan = VpnAppRoutingPlanner.create(
+                    settings = appRouting,
+                    ownerPackageName = ownerPackageName,
+                    installedPackages = visiblePackages,
+                )
+                TunnelManager.log(
+                    "VPN app routing: ${appRouting.mode.label}, " +
+                        "${appRouting.selectedPackages.size} saved selection(s)",
+                )
                 val builder = Builder()
                     .setSession("NusaTunnel")
                     .setMtu(vpnBehavior.mtu)
@@ -117,9 +133,15 @@ class TunnelVpnService : VpnService() {
                             addDnsServer(vpnBehavior.fallbackDns)
                         }
                     }
-                    // AndroidLibXrayLite startLoop() does not expose VpnService.protect(fd).
-                    // Exclude this app so Xray's upstream sockets cannot loop into the TUN.
-                    .addDisallowedApplication(packageName)
+                    .apply {
+                        if (appPlan.allowedPackages != null) {
+                            appPlan.allowedPackages.sorted().forEach { addAllowedApplication(it) }
+                        } else {
+                            // AndroidLibXrayLite startLoop() does not expose VpnService.protect(fd).
+                            // The owner app must never loop its own upstream sockets into the TUN.
+                            appPlan.disallowedPackages.sorted().forEach { addDisallowedApplication(it) }
+                        }
+                    }
                     .setBlocking(true)
 
                 val established = builder.establish()

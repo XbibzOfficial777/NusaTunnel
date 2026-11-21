@@ -30,6 +30,9 @@ import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.TunnelState
 import com.nusa.tunnel.core.UdpTunnelEngine
+import com.nusa.tunnel.core.VpnAppInfo
+import com.nusa.tunnel.core.VpnAppRoutingSettings
+import com.nusa.tunnel.core.VpnApplicationCatalog
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.AppRoot
 import com.nusa.tunnel.ui.Dest
@@ -96,6 +99,17 @@ class MainActivity : ComponentActivity() {
                 }
                 var vpnBehavior by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.vpnBehavior(this@MainActivity))
+                }
+                var vpnAppRouting by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.vpnAppRouting(this@MainActivity))
+                }
+                var availableVpnApps by androidx.compose.runtime.remember {
+                    mutableStateOf(emptyList<VpnAppInfo>())
+                }
+                LaunchedEffect(Unit) {
+                    availableVpnApps = withContext(Dispatchers.IO) {
+                        VpnApplicationCatalog.launchableApps(this@MainActivity)
+                    }
                 }
                 var subBusy by androidx.compose.runtime.remember { mutableStateOf(false) }
 
@@ -239,6 +253,27 @@ class MainActivity : ComponentActivity() {
                                 this@MainActivity,
                                 "Pengaturan VPN disimpan",
                                 Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
+                    vpnAppRouting = vpnAppRouting,
+                    availableVpnApps = availableVpnApps,
+                    onVpnAppRouting = { next ->
+                        if (TunnelSettings.setVpnAppRouting(this@MainActivity, next)) {
+                            vpnAppRouting = next
+                            TunnelManager.log(
+                                "VPN app routing saved: ${next.mode.label}, ${next.selectedPackages.size} app(s); applies next connection",
+                            )
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Per-app VPN disimpan; berlaku pada koneksi berikutnya",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        } else {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Pilih aplikasi yang valid; mode aplikasi terpilih memerlukan minimal satu aplikasi",
+                                Toast.LENGTH_LONG,
                             ).show()
                         }
                     },
