@@ -1,0 +1,47 @@
+#!/bin/bash
+# =============================================================
+# NusaTunnel 2.2 — launcher (Linux)
+# UTAMA: aplikasi desktop Electron (liquid glass, jendela sendiri).
+# FALLBACK: bila Electron gagal (GPU/driver dll), UI dibuka di
+# browser default via backend WebUI murni Python stdlib.
+# =============================================================
+unset PYTHONHOME
+
+APP_LIB="/usr/lib/nusatunnel"
+DESKTOP="$APP_LIB/desktop/nusatunnel"
+LOG_DIR="$HOME/.config/nusatunnel"
+mkdir -p "$LOG_DIR" 2>/dev/null
+
+# interpreter Python SISTEM (PATH bisa berisi pyenv/conda tanpa stdlib lengkap)
+for cand in /usr/bin/python3 /usr/bin/python3.12 /usr/bin/python3.11 \
+            /usr/bin/python3.10 /usr/bin/python3.9; do
+    [ -x "$cand" ] && PY="$cand" && break
+done
+[ -z "${PY:-}" ] && PY="$(command -v python3 || true)"
+
+echo "[$(date '+%F %T')] launch: desktop=${NUSATUNNEL_NO_DESKTOP:-auto} $*" >> "$LOG_DIR/launcher.log" 2>/dev/null
+
+# ---------- mode utama: aplikasi desktop Electron ----------
+if [ -z "${NUSATUNNEL_NO_DESKTOP:-}" ] && [ -x "$DESKTOP" ]; then
+    # NUSA_ELECTRON_EXTRA: bila user perlu flag tambahan (mis. --disable-gpu)
+    exec "$DESKTOP" ${NUSA_ELECTRON_EXTRA:-} "$@"
+fi
+
+# ---------- fallback: backend + browser ----------
+if [ -z "$PY" ]; then
+    zenity --error --title "NusaTunnel" \
+      --text "Python 3 tidak ditemukan.\nPasang dengan:\nsudo apt install python3" 2>/dev/null \
+      || xmessage "NusaTunnel: Python 3 tidak ditemukan. sudo apt install python3" 2>/dev/null
+    exit 1
+fi
+
+# curl dibutuhkan untuk subscription & cek IP — jarang hilang, tapi cek
+if ! command -v curl >/dev/null 2>&1; then
+    if zenity --question --title "NusaTunnel" \
+        --text "curl belum terpasang (dibutuhkan untuk subscription & cek IP).\n\nPasang sekarang?" 2>/dev/null; then
+        pkexec apt-get install -y curl >>"$LOG_DIR/launcher.log" 2>&1
+    fi
+fi
+
+echo "[$(date '+%F %T')] fallback mode web (browser)" >> "$LOG_DIR/launcher.log" 2>/dev/null
+exec "$PY" "$APP_LIB/main.pyw" "$@"

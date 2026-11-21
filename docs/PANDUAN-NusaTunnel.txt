@@ -1,0 +1,110 @@
+============================================================
+ PANDUAN NusaTunnel 2.2.0 — LINUX, WINDOWS, macOS
+============================================================
+
+NusaTunnel 2.2 adalah klien tunneling VMess / VLESS (REALITY) /
+Trojan / Shadowsocks berbasis Xray-core resmi (XTLS), kini
+berjalan sebagai APLIKASI DESKTOP ELEKTRON + REACT +
+TYPESCRIPT (arsitektur ala VSCode) dengan UI liquid glass
+gelap beranimasi (jendela sendiri, bukan browser).
+
+BARU DI 2.2:
+ * UI ditulis ulang dengan React 19 + TypeScript strict +
+   animasi framer-motion (lebih modern, tidak kaku)
+ * PERBAIKAN: tombol putus koneksi kini benar-benar memutus
+   (sebelumnya gagal terkirim); UI tidak lagi beku saat
+   mematikan TUN
+
+------------------------------------------------------------
+ 1. PAKET YANG TERSEDIA
+------------------------------------------------------------
+ * nusatunnel_2.2.0_amd64.deb              -> Linux Mint/Ubuntu/Debian 64-bit
+ * NusaTunnel-2.2.0-Windows-x64.zip        -> Windows 10 (1803+) 64-bit, PORTABLE
+ * NusaTunnel-2.2.0-macOS-AppleSilicon.zip -> macOS M1/M2/M3/M4
+ * NusaTunnel-2.2.0-macOS-Intel.zip        -> macOS Intel
+
+------------------------------------------------------------
+ 2. INSTALASI
+------------------------------------------------------------
+LINUX MINT / DEBIAN:
+   sudo apt install ./nusatunnel_2.2.0_amd64.deb
+   (dependensi + pustaka Chromium terpasang otomatis)
+   Buka dari menu "NusaTunnel" atau terminal: nusatunnel
+   -> jendela aplikasi desktop terbuka (liquid glass).
+   Bila driver GPU bermasalah sehingga jendela gagal dibuka:
+       NUSATUNNEL_NO_DESKTOP=1 nusatunnel
+   (mode web lama di browser sebagai fallback darurat)
+
+WINDOWS:
+   1. Ekstrak ZIP ke folder tetap, mis. C:\NusaTunnel
+   2. Dua-klik NusaTunnel.exe  (tanpa instalasi apa pun!)
+   - Sudah berisi Electron + Python 3.12 resmi + xray.exe resmi.
+   - Jika SmartScreen muncul: "More info" > "Run anyway".
+
+macOS:
+   1. Ekstrak ZIP, mis. ke ~/Applications
+   2. Dua-klik NusaTunnel.app
+   - Bila Gatekeeper memblokir, jalankan sekali di Terminal:
+     xattr -dr com.apple.quarantine NusaTunnel.app
+   - Bila Mac meminta Python 3: xcode-select --install
+
+------------------------------------------------------------
+ 3. CARA PAKAI (sama di semua platform)
+------------------------------------------------------------
+ 1) Jalankan NusaTunnel -> jendela aplikasi terbuka
+ 2) Tab SERVER:
+    - Tempel URL subscription lalu "Perbarui", atau
+    - "Impor Link" untuk paste vmess:// vless:// trojan:// ss://
+    - "Tes Latensi" untuk mengukur semua server
+ 3) Tekan "Hubungkan" pada server pilihan
+ 4) Tombol daya besar di BERANDA = sambung/putus cepat
+ 5) DAFTAR SERVER TERPAGINASI: hanya 15 server per halaman;
+    tombol MUAT LAGI menambah 15 server berikutnya per klik
+    (tetap dibatasi agar ringan walau subscription ratusan
+    server; ada hitungan "Menampilkan X dari Y server").
+
+------------------------------------------------------------
+ 4. IP BERUBAH DI SPEEDTEST? (Mode TUN - LINUX)
+------------------------------------------------------------
+Aplikasi seperti speedtest/game MENGABAIKAN proxy sistem.
+Agar SELURUH trafik perangkat dipaksa lewat tunnel, nyalakan
+"Mode TUN" (kartu di Beranda / Pengaturan) atau:
+    nusatunnel-cli tun on
+(mode TUN meminta password admin satu kali via pkexec)
+
+------------------------------------------------------------
+ 5. PROXY LOKAL (semua platform)
+------------------------------------------------------------
+   SOCKS5 : 127.0.0.1:10808
+   HTTP   : 127.0.0.1:10809
+   (klik kartu "Proxy Lokal" di UI untuk menyalin)
+Di Linux, proxy sistem GNOME/Cinnamon/MATE juga disetel
+otomatis (dapat dimatikan di Pengaturan).
+
+------------------------------------------------------------
+ 6. CLI LINUX (nusatunnel-cli)
+------------------------------------------------------------
+   nusatunnel-cli list | start <nama> | stop | status
+   nusatunnel-cli tun on|off|status
+   nusatunnel-cli doctor        <- diagnostik lengkap
+   nusatunnel-cli log
+
+------------------------------------------------------------
+ 7. LOKASI DATA
+------------------------------------------------------------
+   Linux  : ~/.config/nusatunnel/
+   Windows: %APPDATA%\NusaTunnel\
+   macOS  : ~/Library/Application Support/NusaTunnel/
+
+------------------------------------------------------------
+ 8. PEMECAHAN MASALAH
+------------------------------------------------------------
+ * Jendela desktop tidak muncul (Linux): coba
+       NUSA_ELECTRON_EXTRA="--disable-gpu" nusatunnel
+   atau fallback web: NUSATUNNEL_NO_DESKTOP=1 nusatunnel
+ * Server tidak bisa dihubungi : cek internet / Tes Latensi
+ * Log : tab "Log" di UI, atau file nusatunnel.log
+ * Menutup aplikasi otomatis memutus tunnel & memulihkan
+   pengaturan sistem (proxy/rute) - aman dimatikan kapan saja.
+
+Selamat menjelajah internet tanpa batas!

@@ -1,0 +1,43 @@
+Package: nusatunnel
+Version: 2.2.0
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: python3 (>= 3.6), curl, iproute2, policykit-1, libc6,
+ libgtk-3-0 | libgtk-3-0t64, libnss3, libasound2 | libasound2t64,
+ libxtst6, libxss1, libgbm1, libdrm2,
+ libatk-bridge2.0-0 | libatk-bridge2.0-0t64,
+ libatspi2.0-0 | libatspi2.0-0t64, libxkbcommon0
+Maintainer: NusaTunnel Project <admin@nusatunnel.id>
+Installed-Size: 300000
+Description: Klien tunneling VMess/VLESS/Trojan/Shadowsocks untuk Linux Mint
+ NusaTunnel adalah klien tunneling desktop berbasis binary Xray-core
+ resmi (XTLS), lintas platform (Linux/Windows/macOS), dengan shell
+ aplikasi Electron + React + TypeScript (arsitektur ala VSCode) dan
+ antarmuka "liquid glass" modern beranimasi.
+ .
+ Fitur:
+  * Aplikasi desktop sungguhan: jendela Electron frameless dengan
+    titlebar kustom, tray icon, single-instance
+  * UI React + TypeScript strict, animasi framer-motion, desain
+    liquid glass gelap (aurora bergerak, kaca blur berlapis,
+    highlight spekular, font Montserrat offline)
+  * PERBAIKAN: tombol putus koneksi kini benar-benar memutus
+    (dulu permintaan PUTUS terkirim sebagai GET dan ditolak 404)
+    plus teardown TUN tidak lagi membekukan UI (tidak menahan
+    lock saat pkexec; xray dibunuh lebih dulu, eskalasi SIGKILL)
+  * Support protokol VMess, VLESS (termasuk REALITY), Trojan,
+    dan Shadowsocks
+  * Daftar server terpaginasi: "Muat Lagi" menambah 15 server
+    per klik (tetap dibatasi, tidak menampilkan semuanya)
+  * Import link tunggal maupun massal (paste banyak link)
+  * Subscription URL (base64 / teks polos) dengan sekali klik
+  * Tes latensi TCP ke semua server sekaligus
+  * Proxy lokal SOCKS5 (10808) dan HTTP (10809)
+  * Proxy sistem otomatis (GNOME/Cinnamon/MATE)
+  * MODE TUN: VPN level sistem via tun2socks — SELURUH trafik
+    (browser, speedtest, game, CLI) dipaksa lewat tunnel
+  * Fallback tanpa Electron: NUSATUNNEL_NO_DESKTOP=1 membuka UI
+    yang sama di browser default
+  * Diagnostik: nusatunnel-cli doctor
+  * CLI: nusatunnel-cli list|start|stop|status|log|tun|doctor

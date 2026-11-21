@@ -1,0 +1,57 @@
+#!/bin/bash
+# NusaTunnel 2.2 postinst — dependensi, sandbox Electron, cache ikon
+set -e
+
+PKGS=""
+check_pkg () {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed" || PKGS="$PKGS $2"
+}
+# dependensi inti + pustaka yang dibutuhkan runtime Electron (Chromium)
+for pair in "python3 python3" "curl curl" "iproute2 iproute2" \
+            "policykit-1 policykit-1" \
+            "libgtk-3-0 libgtk-3-0t64" "libnss3 libnss3" \
+            "libasound2 libasound2t64" "libxtst6 libxtst6" \
+            "libxss1 libxss1" "libgbm1 libgbm1" "libdrm2 libdrm2" \
+            "libatk-bridge2.0-0 libatk-bridge2.0-0t64" \
+            "libatspi2.0-0 libatspi2.0-0t64" "libxkbcommon0 libxkbcommon0"; do
+    set -- $pair
+    # terima nama lama ATAU nama t64 baru
+    if ! dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed" && \
+       ! dpkg-query -W -f='${Status}' "$2" 2>/dev/null | grep -q "install ok installed"; then
+        # pilih nama yang dikenal apt pada distro ini
+        if apt-cache show "$1" >/dev/null 2>&1; then PKGS="$PKGS $1"
+        elif apt-cache show "$2" >/dev/null 2>&1; then PKGS="$PKGS $2"; fi
+    fi
+done
+if [ -n "$PKGS" ]; then
+    echo "NusaTunnel: memasang dependensi yang hilang:$PKGS"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get install -y $PKGS >/dev/null 2>&1 || \
+            echo "PERINGATAN: gagal memasang$PKGS — jalankan: sudo apt install$PKGS"
+    fi
+fi
+
+# pastikan biner dapat dieksekusi
+chmod 755 /usr/lib/nusatunnel/bin/xray /usr/lib/nusatunnel/tun2socks \
+           /usr/lib/nusatunnel/tunmgr-root.sh /usr/bin/nusatunnel \
+           /usr/bin/nusatunnel-cli 2>/dev/null || true
+
+# Chromium sandbox: butuh setuid root agar Electron tidak butuh --no-sandbox
+if [ -f /usr/lib/nusatunnel/desktop/chrome-sandbox ]; then
+    chown root:root /usr/lib/nusatunnel/desktop/chrome-sandbox 2>/dev/null || true
+    chmod 4755 /usr/lib/nusatunnel/desktop/chrome-sandbox 2>/dev/null || true
+fi
+[ -f /usr/lib/nusatunnel/desktop/nusatunnel ] && chmod 755 /usr/lib/nusatunnel/desktop/nusatunnel || true
+
+# perbarui cache desktop & ikon
+if [ -x /usr/bin/update-desktop-database ]; then update-desktop-database -q || true; fi
+if [ -x /usr/bin/gtk-update-icon-cache ]; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+if [ -x /usr/bin/fc-cache ]; then fc-cache -f >/dev/null 2>&1 || true; fi
+
+echo ""
+echo "NusaTunnel 2.2.0 terpasang."
+echo "  Jalankan dari menu 'NusaTunnel' atau terminal: nusatunnel"
+echo "  Aplikasi desktop (Electron) terbuka sebagai jendela sendiri."
+echo "  Bila driver GPU bermasalah: NUSATUNNEL_NO_DESKTOP=1 nusatunnel"
+
+exit 0

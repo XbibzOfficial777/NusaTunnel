@@ -1,0 +1,27 @@
+# Node
+node_modules/
+dist/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Build output & binary besar (unduh via script packaging / GitHub Releases)
+*.deb
+*.zip
+*.aar
+*.apk
+electron-dl/
+android-dl/
+android-sdk/
+gradle-*/
+*.exe
+*.dmg
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

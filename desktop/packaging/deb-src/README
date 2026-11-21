@@ -1,0 +1,64 @@
+NusaTunnel 2.2.0 — Klien Tunneling Modern untuk Linux Mint
+============================================================
+
+NusaTunnel menyambungkan Anda ke server VMess / VLESS (REALITY) /
+Trojan / Shadowsocks memakai binary Xray-core resmi (XTLS), sebagai
+APLIKASI DESKTOP ELEKTRON + REACT + TYPESCRIPT (arsitektur ala
+VSCode) ber-UI liquid glass gelap beranimasi.
+
+CARA PAKAI
+----------
+1. Buka NusaTunnel dari menu aplikasi (atau jalankan: nusatunnel)
+   — jendela aplikasi desktop terbuka (bukan browser).
+2. Tab "Server": tempel URL subscription atau impor link
+   (vmess:// vless:// trojan:// ss://) lalu tekan "Hubungkan".
+3. (Opsional) Nyalakan "Mode TUN" agar SELURUH trafik perangkat
+   (termasuk speedtest & game) lewat tunnel.
+
+FALLBACK
+--------
+Bila driver GPU bermasalah sehingga jendela desktop gagal dibuka:
+   NUSATUNNEL_NO_DESKTOP=1 nusatunnel
+membuka mode web lama di browser default (http://127.0.0.1:17500).
+
+FITUR
+-----
+* Aplikasi desktop Electron + React 19 + TypeScript strict:
+  jendela sendiri, titlebar kustom, tray icon, single-instance,
+  cleanup otomatis saat ditutup, animasi framer-motion
+* UI liquid glass gelap: aurora hijau-lime bergerak, panel kaca
+  blur berlapis, highlight spekular, font Montserrat offline
+* PERBAIKAN 2.2: tombol putus koneksi kini benar-benar memutus
+  (aksi UI dulu terkirim GET dan ditolak backend); teardown TUN
+  tidak lagi membekukan UI
+* Daftar server terpaginasi: "Muat Lagi" menambah 15 server
+  per klik (ringan walau subscription ratusan server)
+* VMess, VLESS + REALITY, Trojan, Shadowsocks
+* Subscription base64 / teks polos
+* Tes latensi TCP semua server sekaligus
+* Proxy lokal: SOCKS5 127.0.0.1:10808, HTTP 127.0.0.1:10809
+* Proxy sistem otomatis (GNOME/Cinnamon/MATE)
+* Mode TUN: VPN level sistem (semua aplikasi dipaksa lewat tunnel)
+* Panel log real-time
+
+BARIS PERINTAH (nusatunnel-cli)
+-------------------------------
+  nusatunnel-cli list               daftar server
+  nusatunnel-cli start <nama>       sambungkan
+  nusatunnel-cli stop               putuskan
+  nusatunnel-cli status             status + IP keluar
+  nusatunnel-cli tun on|off|status  Mode TUN
+  nusatunnel-cli doctor             diagnostik lengkap
+  nusatunnel-cli log                tail log
+
+LOKASI DATA
+-----------
+  Konfigurasi : ~/.config/nusatunnel/
+  Log         : ~/.config/nusatunnel/nusatunnel.log
+
+MASALAH UMUM
+------------
+* "Belum ada server" — impor link/subscription di tab Server.
+* Speedtest masih menampilkan ISP asli — nyalakan Mode TUN
+  (aplikasi speedtest mengabaikan proxy sistem).
+* Port UI sibuk — otomatis pindah ke 17501/17510/17999.

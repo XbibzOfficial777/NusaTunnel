@@ -1,0 +1,105 @@
+nusatunnel (2.2.0) stable; urgency=high
+
+  * REACT + TYPESCRIPT (arsitektur ala VSCode): shell desktop
+    ditulis ulang penuh — proses utama Electron + preload
+    (contextBridge) dalam TypeScript strict, renderer React 19
+    dengan animasi framer-motion, di-build Vite (typecheck
+    tsc bersih, tanpa error). Backend Python stdlib tetap
+    menyajikan UI + API lokal di 127.0.0.1.
+  * DESAIN "LIQUID GLASS" GELAP: aurora hijau-lime bergerak di
+    belakang panel kaca berlapis (backdrop blur + saturasi),
+    highlight spekular, tombol daya bola kaca dengan riak lime
+    saat terhubung, rotor amber saat menghubungkan, glider
+    navigasi spring, stagger baris server, shimmer IP, toast
+    glass — semua beranimasi halus, tidak kaku.
+  * PERBAIKAN KRITIS "TIDAK MAU PUTUS": permintaan pemutusan
+    dari UI dulu terkirim sebagai GET (ditolak 404 backend) —
+    kini semua aksi wajib POST. Ditambah: stop() membunuh Xray
+    lebih dulu (status turun seketika), teardown TUN/pkexec
+    tidak lagi menahan lock manager (UI tidak pernah beku),
+    eskalasi SIGTERM->SIGKILL, dan verifikasi PID milik Xray
+    sebelum membunuh (anti PID-reuse).
+  * Optimistik UI saat memutus: label "Memutuskan…" langsung
+    tampil, tidak menunggu backend.
+  * Paginasi daftar server dipertahankan: 15 per potong, tombol
+    MUAT LAGI menambah satu potong per klik.
+
+ -- NusaTunnel Project <admin@nusatunnel.id>  Sat, 21 Nov 2026 23:30:00 +0700
+
+nusatunnel (2.1.0) stable; urgency=high
+
+  * APLIKASI DESKTOP ELEKTRON: NusaTunnel kini berjalan sebagai
+    aplikasi desktop sungguhan (Electron 31 resmi) di jendela
+    sendiri — BUKAN lagi terbuka di browser. Frameless window
+    dengan titlebar kustom (tombol minimize/maximize/close),
+    tray icon, single-instance, dan cleanup otomatis backend
+    (tunnel diputus & sistem dipulihkan) saat aplikasi ditutup.
+  * Launcher tetap punya fallback: bila runtime grafis bermasalah,
+    NUSATUNNEL_NO_DESKTOP=1 membuka mode web lama di browser.
+  * ROMBAK UI "LIQUID GLASS": panel kaca cair transparan dengan
+    blur & saturasi (backdrop-filter), tepi specular, sudut
+    membulat besar (22px), sheen cair beranimasi saat hover,
+    tombol dengan kilau glass — memakai palet DESIGN.md (hijau
+    spruce #008254, tangga mint, keluarga lime, font Montserrat
+    300/700 yang dibundel offline).
+  * Hero band kaca hijau spruce dengan kilau cair bergerak;
+    tombol daya bola kaca dengan titik specular, cincin riak
+    lime saat menghubungkan & rotor berputar saat terhubung;
+    kartu IP stat gelap deep-spruce dengan label lime; daftar
+    server panel kaca dengan indikator aktif gradien.
+  * Animasi: glider navigasi kaca dengan spring, reveal
+    berjenjang, stagger baris server, shimmer skeleton IP,
+    latar blob mint bergerak lembut di belakang kaca.
+  * PAGINASI DAFTAR SERVER (permintaan pengguna): daftar
+    dibatasi 15 server per halaman; tombol "MUAT LAGI" menambah
+    SATU potong (15 server berikutnya) per klik — bukan
+    menampilkan semuanya sekaligus; pencarian/perubahan daftar
+    otomatis kembali ke halaman awal; hitungan "Menampilkan X
+    dari Y server".
+  * chrome-sandbox dipasang setuid-root via postinst agar
+    Electron aman tanpa --no-sandbox.
+
+ -- NusaTunnel Project <admin@nusatunnel.id>  Sat, 21 Nov 2026 21:30:00 +0700
+
+nusatunnel (2.0.0) stable; urgency=high
+
+  * RILIS BESAR — NusaTunnel kini LINTAS PLATFORM: Linux (.deb),
+    Windows (zip portable), dan macOS (zip universal amd64+arm64).
+  * UI/CLI DIROMBAK TOTAL: antarmuka web modern beranimasi
+    (tema "Midnight Aurora": glassmorphism, latar aurora gradien
+    bergerak, tombol daya dengan cincin gradien berputar saat
+    terhubung dan riak mengembang saat menghubungkan, transisi
+    antar halaman yang halus, toast notifikasi, kartu server dengan
+    animasi masuk berjenjang) — terbuka otomatis di browser default.
+  * Tanpa dependensi GTK/python3-gi lagi: backend WebUI murni
+    Python stdlib (http.server) — mustahil gagal buka karena
+    masalah import GI seperti v1.0.x.
+  * Keamanan lokal: server UI hanya mendengarkan 127.0.0.1,
+    POST wajib header khusus X-NusaTunnel + validasi Host
+    (anti DNS-rebinding/CSRF dari situs lain).
+  * Paket Windows: Python 3.12 embeddable resmi + xray.exe resmi
+    XTLS — portable, tanpa instalasi, dua klik langsung jalan.
+  * Paket macOS: binary xray darwin amd64 & arm64 + launcher
+    .command double-click.
+  * Baris perintah baru di UI: tes latensi semua server, hapus
+    server, salin endpoint proxy sekali klik, panel log langsung.
+  * CLI: nusatunnel-cli tetap tersedia di Linux (list|start|stop|
+    status|log|tun|doctor).
+  * Mode TUN (Linux) tetap didukung penuh lewat UI baru.
+
+ -- NusaTunnel Project <admin@nusatunnel.id>  Sat, 21 Nov 2026 06:30:00 +0700
+
+nusatunnel (1.2.0) stable; urgency=high
+
+  * FITUR UTAMA — MODE TUN (VPN level sistem, seperti TUN mode
+    v2rayN/Nekoray): interface nusatun0 via tun2socks resmi
+    (xjasonlyu v2.5.2, binary rilis GitHub) yang mengalihkan
+    rute default sistem, sehingga SEMUA aplikasi — termasuk
+    speedtest, game, CLI, dan aplikasi yang MENGABAIKAN proxy
+    sistem — otomatis lewat tunnel.
+  * Helper root /usr/lib/nusatunnel/tunmgr-root.sh via pkexec.
+  * Aturan polkit (40-nusatunnel.rules).
+  * Watchdog: bila tun2socks mati/crash, rute otomatis dipulihkan.
+  * CLI baru: nusatunnel-cli tun on|off|status dan doctor.
+
+ -- NusaTunnel Project <admin@nusatunnel.id>  Sat, 21 Nov 2026 05:30:00 +0700
