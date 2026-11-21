@@ -56,6 +56,10 @@ jobs:
         working-directory: android
         run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Assemble Android release APKs (no publishing)
+        working-directory: android
+        run: gradle :app:assembleNusaRelease --no-daemon --stacktrace --warning-mode=summary
+
       - name: Download matching Xray-core binary
         run: |
           curl -fL --retry 3 -o /tmp/xray.zip \
