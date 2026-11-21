@@ -56,6 +56,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.BuildConfig
+import com.nusa.tunnel.core.ConnectionCheckSettings
+import com.nusa.tunnel.core.ConnectionCheckSettingsValidator
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelManager
@@ -91,6 +93,8 @@ fun SettingsScreen(
     onAutoPing: (Boolean) -> Unit,
     keepCpuAwake: Boolean,
     onKeepCpuAwake: (Boolean) -> Unit,
+    connectionCheck: ConnectionCheckSettings,
+    onConnectionCheck: (ConnectionCheckSettings) -> Unit,
     onOpenBatterySettings: () -> Unit,
     onOpenAlwaysOnVpnSettings: () -> Unit,
     vpnBehavior: VpnBehaviorSettings,
@@ -112,6 +116,12 @@ fun SettingsScreen(
                 settings = vpnAppRouting,
                 apps = availableVpnApps,
                 onSave = onVpnAppRouting,
+                onBack = { subPage = "" },
+            )
+        } else if (subPage == "connection_check") {
+            ConnectionCheckPage(
+                settings = connectionCheck,
+                onSave = onConnectionCheck,
                 onBack = { subPage = "" },
             )
         } else {
@@ -177,6 +187,17 @@ fun SettingsScreen(
                         title = "Per-app VPN",
                         summary = "${vpnAppRouting.mode.label} · ${vpnAppRouting.selectedPackages.size} selected · applies next connection",
                         onClick = { subPage = "per_app" },
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        title = "Connection check",
+                        summary = if (connectionCheck.enabled) {
+                            "${connectionCheck.url} · every ${connectionCheck.intervalSeconds}s"
+                        } else {
+                            "${connectionCheck.url} · disabled"
+                        },
+                        onClick = { subPage = "connection_check" },
+                        testTag = "connection_check_row",
                     )
                     SettingsDivider()
                     SwitchRow(
@@ -371,6 +392,170 @@ private fun PerAppVpnPage(
 }
 
 @Composable
+private fun ConnectionCheckPage(
+    settings: ConnectionCheckSettings,
+    onSave: (ConnectionCheckSettings) -> Unit,
+    onBack: () -> Unit,
+) {
+    var enabled by rememberSaveable { mutableStateOf(settings.enabled) }
+    var url by rememberSaveable { mutableStateOf(settings.url) }
+    var intervalText by rememberSaveable { mutableStateOf(settings.intervalSeconds.toString()) }
+    var timeoutText by rememberSaveable { mutableStateOf(settings.timeoutSeconds.toString()) }
+    var attemptsText by rememberSaveable { mutableStateOf(settings.maxAttempts.toString()) }
+    var stopOnFailure by rememberSaveable { mutableStateOf(settings.stopOnFailure) }
+
+    val interval = intervalText.toIntOrNull()?.takeIf {
+        it in ConnectionCheckSettings.MIN_INTERVAL_SECONDS..ConnectionCheckSettings.MAX_INTERVAL_SECONDS
+    }
+    val timeout = timeoutText.toIntOrNull()?.takeIf {
+        it in ConnectionCheckSettings.MIN_TIMEOUT_SECONDS..ConnectionCheckSettings.MAX_TIMEOUT_SECONDS
+    }
+    val attempts = attemptsText.toIntOrNull()?.takeIf {
+        it in ConnectionCheckSettings.MIN_MAX_ATTEMPTS..ConnectionCheckSettings.MAX_MAX_ATTEMPTS
+    }
+    val urlValid = ConnectionCheckSettingsValidator.isValidUrl(url)
+    val formValid = urlValid && interval != null && timeout != null && attempts != null
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Kembali", tint = Frost)
+            }
+            Text("Connection check", style = MaterialTheme.typography.titleLarge, color = Frost)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Pemeriksaan mengirim GET melalui SOCKS5 lokal Xray yang aktif, bukan koneksi langsung Android. " +
+                "Respons HTTP 2xx/3xx dianggap berhasil. Pengaturan dapat diubah saat tunnel tersambung.",
+            style = MaterialTheme.typography.bodySmall,
+            color = FrostDim,
+        )
+        Spacer(Modifier.height(16.dp))
+
+        SettingsSection("Probe", Icons.Rounded.Lan) {
+            SwitchRow(
+                title = "Enable connection check",
+                summary = "Jalankan pemeriksaan berkala hanya ketika tunnel berstatus connected.",
+                checked = enabled,
+                onCheckedChange = { enabled = it },
+                testTag = "connection_check_enabled",
+            )
+            SettingsDivider()
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it.take(2_048) },
+                modifier = Modifier.fillMaxWidth().testTag("connection_check_url"),
+                label = { Text("HTTP(S) URL") },
+                isError = !urlValid,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                supportingText = {
+                    if (!urlValid) Text(
+                        "Gunakan URL absolut HTTP/HTTPS tanpa user/password atau fragment.",
+                        color = Danger,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Spruce,
+                    unfocusedBorderColor = Color(0x44FFFFFF),
+                    errorBorderColor = Danger,
+                    focusedTextColor = Frost,
+                    unfocusedTextColor = Frost,
+                    errorTextColor = Frost,
+                    focusedLabelColor = Mint,
+                    unfocusedLabelColor = FrostDim,
+                    errorLabelColor = Danger,
+                    cursorColor = Spruce,
+                ),
+            )
+            SettingsDivider()
+            NumericOrIpField(
+                value = intervalText,
+                onValueChange = { intervalText = it.filter { character -> character.isDigit() }.take(4) },
+                label = "Interval (${ConnectionCheckSettings.MIN_INTERVAL_SECONDS}–${ConnectionCheckSettings.MAX_INTERVAL_SECONDS}s)",
+                valid = interval != null,
+                error = "Interval harus ${ConnectionCheckSettings.MIN_INTERVAL_SECONDS}–${ConnectionCheckSettings.MAX_INTERVAL_SECONDS} detik.",
+                testTag = "connection_check_interval",
+                keyboardType = KeyboardType.Number,
+            )
+            SettingsDivider()
+            NumericOrIpField(
+                value = timeoutText,
+                onValueChange = { timeoutText = it.filter { character -> character.isDigit() }.take(2) },
+                label = "Timeout (${ConnectionCheckSettings.MIN_TIMEOUT_SECONDS}–${ConnectionCheckSettings.MAX_TIMEOUT_SECONDS}s)",
+                valid = timeout != null,
+                error = "Timeout harus ${ConnectionCheckSettings.MIN_TIMEOUT_SECONDS}–${ConnectionCheckSettings.MAX_TIMEOUT_SECONDS} detik.",
+                testTag = "connection_check_timeout",
+                keyboardType = KeyboardType.Number,
+            )
+            SettingsDivider()
+            NumericOrIpField(
+                value = attemptsText,
+                onValueChange = { attemptsText = it.filter { character -> character.isDigit() }.take(2) },
+                label = "Maximum attempts (${ConnectionCheckSettings.MIN_MAX_ATTEMPTS}–${ConnectionCheckSettings.MAX_MAX_ATTEMPTS})",
+                valid = attempts != null,
+                error = "Jumlah percobaan harus ${ConnectionCheckSettings.MIN_MAX_ATTEMPTS}–${ConnectionCheckSettings.MAX_MAX_ATTEMPTS}.",
+                testTag = "connection_check_attempts",
+                keyboardType = KeyboardType.Number,
+            )
+            SettingsDivider()
+            SwitchRow(
+                title = "Stop VPN on failure",
+                summary = "Putuskan tunnel jika seluruh percobaan pada satu siklus gagal.",
+                checked = stopOnFailure,
+                onCheckedChange = { stopOnFailure = it },
+                testTag = "connection_check_stop_on_failure",
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            OutlinedButton(
+                onClick = {
+                    enabled = false
+                    url = ConnectionCheckSettings.DEFAULT_URL
+                    intervalText = ConnectionCheckSettings.DEFAULT_INTERVAL_SECONDS.toString()
+                    timeoutText = ConnectionCheckSettings.DEFAULT_TIMEOUT_SECONDS.toString()
+                    attemptsText = ConnectionCheckSettings.DEFAULT_MAX_ATTEMPTS.toString()
+                    stopOnFailure = false
+                },
+                modifier = Modifier.weight(1f).testTag("reset_connection_check"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
+            ) { Text("Reset") }
+            OutlinedButton(
+                onClick = {
+                    onSave(
+                        ConnectionCheckSettings(
+                            enabled = enabled,
+                            url = url.trim(),
+                            intervalSeconds = requireNotNull(interval),
+                            timeoutSeconds = requireNotNull(timeout),
+                            maxAttempts = requireNotNull(attempts),
+                            stopOnFailure = stopOnFailure,
+                        ),
+                    )
+                    onBack()
+                },
+                enabled = formValid,
+                modifier = Modifier.weight(1f).testTag("save_connection_check"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
+            ) { Text("Save") }
+        }
+    }
+}
+
+@Composable
 private fun VpnBehaviorPage(
     settings: VpnBehaviorSettings,
     onSave: (VpnBehaviorSettings) -> Unit,
@@ -503,11 +688,13 @@ private fun SettingsActionRow(
     title: String,
     summary: String,
     onClick: () -> Unit,
+    testTag: String? = null,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .then(testTag?.let { Modifier.testTag(it) } ?: Modifier)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

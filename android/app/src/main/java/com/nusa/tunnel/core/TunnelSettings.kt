@@ -68,6 +68,12 @@ object TunnelSettings {
     private const val KEY_VPN_APP_MODE = "vpn_app_routing_mode"
     private const val KEY_VPN_APP_PACKAGES = "vpn_app_selected_packages"
     private const val KEY_KEEP_CPU_AWAKE = "keep_cpu_awake_while_vpn_active"
+    private const val KEY_CONNECTION_CHECK_ENABLED = "connection_check_enabled"
+    private const val KEY_CONNECTION_CHECK_URL = "connection_check_url"
+    private const val KEY_CONNECTION_CHECK_INTERVAL = "connection_check_interval_seconds"
+    private const val KEY_CONNECTION_CHECK_TIMEOUT = "connection_check_timeout_seconds"
+    private const val KEY_CONNECTION_CHECK_ATTEMPTS = "connection_check_max_attempts"
+    private const val KEY_CONNECTION_CHECK_STOP_ON_FAILURE = "connection_check_stop_on_failure"
     const val MAX_SELECTED_VPN_APPS = 500
 
     fun parseSocksPort(value: String): Int? =
@@ -199,6 +205,54 @@ object TunnelSettings {
 
     fun setKeepCpuAwake(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_KEEP_CPU_AWAKE, enabled).apply()
+    }
+
+    fun connectionCheck(context: Context): ConnectionCheckSettings {
+        val preferences = prefs(context)
+        return ConnectionCheckSettings(
+            enabled = preferences.getBoolean(KEY_CONNECTION_CHECK_ENABLED, false),
+            url = preferences.getString(
+                KEY_CONNECTION_CHECK_URL,
+                ConnectionCheckSettings.DEFAULT_URL,
+            ).orEmpty().takeIf { ConnectionCheckSettingsValidator.isValidUrl(it) }
+                ?: ConnectionCheckSettings.DEFAULT_URL,
+            intervalSeconds = preferences.getInt(
+                KEY_CONNECTION_CHECK_INTERVAL,
+                ConnectionCheckSettings.DEFAULT_INTERVAL_SECONDS,
+            ).takeIf {
+                it in ConnectionCheckSettings.MIN_INTERVAL_SECONDS..
+                    ConnectionCheckSettings.MAX_INTERVAL_SECONDS
+            } ?: ConnectionCheckSettings.DEFAULT_INTERVAL_SECONDS,
+            timeoutSeconds = preferences.getInt(
+                KEY_CONNECTION_CHECK_TIMEOUT,
+                ConnectionCheckSettings.DEFAULT_TIMEOUT_SECONDS,
+            ).takeIf {
+                it in ConnectionCheckSettings.MIN_TIMEOUT_SECONDS..
+                    ConnectionCheckSettings.MAX_TIMEOUT_SECONDS
+            } ?: ConnectionCheckSettings.DEFAULT_TIMEOUT_SECONDS,
+            maxAttempts = preferences.getInt(
+                KEY_CONNECTION_CHECK_ATTEMPTS,
+                ConnectionCheckSettings.DEFAULT_MAX_ATTEMPTS,
+            ).takeIf {
+                it in ConnectionCheckSettings.MIN_MAX_ATTEMPTS..
+                    ConnectionCheckSettings.MAX_MAX_ATTEMPTS
+            } ?: ConnectionCheckSettings.DEFAULT_MAX_ATTEMPTS,
+            stopOnFailure = preferences.getBoolean(KEY_CONNECTION_CHECK_STOP_ON_FAILURE, false),
+        )
+    }
+
+    /** Rejects malformed URLs and out-of-range schedule values without changing stored settings. */
+    fun setConnectionCheck(context: Context, settings: ConnectionCheckSettings): Boolean {
+        if (!ConnectionCheckSettingsValidator.isValid(settings)) return false
+        prefs(context).edit()
+            .putBoolean(KEY_CONNECTION_CHECK_ENABLED, settings.enabled)
+            .putString(KEY_CONNECTION_CHECK_URL, settings.url.trim())
+            .putInt(KEY_CONNECTION_CHECK_INTERVAL, settings.intervalSeconds)
+            .putInt(KEY_CONNECTION_CHECK_TIMEOUT, settings.timeoutSeconds)
+            .putInt(KEY_CONNECTION_CHECK_ATTEMPTS, settings.maxAttempts)
+            .putBoolean(KEY_CONNECTION_CHECK_STOP_ON_FAILURE, settings.stopOnFailure)
+            .apply()
+        return true
     }
 
     fun speedUnit(context: Context): SpeedUnit =
