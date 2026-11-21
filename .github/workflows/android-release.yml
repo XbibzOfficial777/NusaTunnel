@@ -313,6 +313,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_KEY_CERT_SHA256 }}
         run: |
           set -euo pipefail
           for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
@@ -325,8 +326,21 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/nusatunnel-release.p12"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           test -s "$KEYSTORE_PATH"
-          keytool -list -storetype PKCS12 -keystore "$KEYSTORE_PATH" \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          if [[ -z "${EXPECTED_CERT_SHA256:-}" ]]; then
+            echo '::error::Set the non-secret repository variable ANDROID_KEY_CERT_SHA256 before releasing.'
+            exit 1
+          fi
+          keystore_digest="$(keytool -list -v -storetype PKCS12 -keystore "$KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" \
+            | awk -F': ' '/SHA256:/ {print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          expected_digest="$(printf '%s' "$EXPECTED_CERT_SHA256" \
+            | sed -E 's/^[[:space:]]*[sS][hH][aA]256[[:space:]]*[:=][[:space:]]*//' \
+            | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$keystore_digest" || "$keystore_digest" != "$expected_digest" ]]; then
+            echo "::error::Configured signing keystore does not match the expected certificate fingerprint. Expected ${expected_digest:-missing}; keystore ${keystore_digest:-missing}."
+            exit 1
+          fi
+          echo 'Configured signing certificate fingerprint verified.'
           printf '%s' "$ANDROID_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/nusatunnel-store-password"
           printf '%s' "$ANDROID_KEY_PASSWORD" > "$RUNNER_TEMP/nusatunnel-key-password"
           chmod 600 "$KEYSTORE_PATH" "$RUNNER_TEMP/nusatunnel-store-password" "$RUNNER_TEMP/nusatunnel-key-password"
@@ -339,6 +353,7 @@ jobs:
           NUSATUNNEL_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           NUSATUNNEL_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NUSATUNNEL_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          NUSATUNNEL_REQUIRE_RELEASE_SIGNING: 'true'
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -349,7 +364,8 @@ jobs:
             exit 1
           fi
           gradle :app:assembleNusaRelease :app:bundleNusaRelease \
-            --no-daemon --stacktrace --warning-mode=summary
+            --no-daemon --no-build-cache --no-configuration-cache \
+            --stacktrace --warning-mode=summary
 
       - name: Verify APK signatures use the rotated certificate
         shell: bash
@@ -374,7 +390,8 @@ jobs:
             echo '::error::apksigner was not found in the Android SDK.'
             exit 1
           fi
-          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          expected_raw="$(printf '%s' "$EXPECTED_CERT_SHA256" | sed -E 's/^[[:space:]]*[sS][hH][aA]256[[:space:]]*[:=][[:space:]]*//')"
+          expected="$(printf '%s' "$expected_raw" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
           shopt -s nullglob
           apks=(android/app/build/outputs/apk/nusaRelease/*.apk)
           if (( ${#apks[@]} == 0 )); then
@@ -383,9 +400,13 @@ jobs:
           fi
           for apk in "${apks[@]}"; do
             output="$("$APKSIGNER" verify --print-certs "$apk")"
-            actual="$(printf '%s\n' "$output" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            actual_raw="$(printf '%s\n' "$output" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
+            actual="$(printf '%s' "$actual_raw" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
             if [[ -z "$actual" || "$actual" != "$expected" ]]; then
-              echo "::error::Signature certificate mismatch for $(basename "$apk")."
+              echo "::error::Signature certificate mismatch for $(basename "$apk"). Expected SHA-256=${expected:-missing}; APK signer SHA-256=${actual:-unparsed}."
+              if [[ -z "$actual" ]]; then
+                echo "::error::apksigner output: ${output:-<empty>}"
+              fi
               exit 1
             fi
             echo "Verified rotated signing certificate: $(basename "$apk")"
