@@ -102,3 +102,89 @@ jobs:
 
       - name: Validate generated configs with Xray-core
         run: python3 ci/verify_xray_config.py /tmp/xray-bin/xray
+
+  android-kvm-instrumentation:
+    name: Compose UI instrumentation on KVM
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LIBXRAY_VERSION: v26.11.9
+      HEV_VERSION: 2.18.0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle 9.9.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.9.2'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '15859902'
+          packages: platform-tools
+
+      - name: Install compile SDK and x86_64 emulator image
+        run: sdkmanager 'platform-tools' 'platforms;android-37.1' 'build-tools;37.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
+
+      - name: Require a usable KVM device
+        run: |
+          if [[ ! -e /dev/kvm ]]; then
+            echo '::error::/dev/kvm is missing; refusing to run Android without KVM acceleration.'
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_SDK_ROOT/emulator/emulator" -accel-check
+
+      - name: Cache Android engine AARs
+        id: engine-aars
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/app/libs/libxray.aar
+            android/app/libs/hev-socks5-tunnel.aar
+          key: engine-aars-${{ env.LIBXRAY_VERSION }}-${{ env.HEV_VERSION }}
+
+      - name: Download Android engine AARs
+        if: steps.engine-aars.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/libxray.aar \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
+          curl -fL --retry 3 -o android/app/libs/hev-socks5-tunnel.aar \
+            "https://github.com/heiher/hev-socks5-tunnel/releases/download/${HEV_VERSION}/hev-socks5-tunnel.aar"
+          test -s android/app/libs/libxray.aar
+          test -s android/app/libs/hev-socks5-tunnel.aar
+
+      - name: Verify HevSocks5Tunnel AAR checksum
+        run: echo "15ec8ed121663b562c99caa5bb602d1009f24e5b09e733438b81988f12feaaab  android/app/libs/hev-socks5-tunnel.aar" | sha256sum -c -
+
+      - name: Run Android instrumentation tests on KVM emulator
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -camera-back none -camera-front none -gpu swiftshader_indirect -accel on
+          script: cd android && gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest
+
+      - name: Upload instrumentation test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-kvm-instrumentation-${{ github.run_id }}
+          path: |
+            android/app/build/outputs/androidTest-results/connected/
+            android/app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 14

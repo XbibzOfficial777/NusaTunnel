@@ -28,7 +28,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.core.EngineLogLevel
-import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.UdpTunnelEngine
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.screens.DashboardScreen
@@ -70,8 +69,8 @@ fun AppRoot(
     onUdpEngine: (UdpTunnelEngine) -> Unit,
     logLevel: EngineLogLevel,
     onLogLevel: (EngineLogLevel) -> Unit,
-    logRetention: LogRetention,
-    onLogRetention: (LogRetention) -> Unit,
+    logEntryLimit: Int,
+    onLogEntryLimit: (Int) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
     vpnBehavior: VpnBehaviorSettings,
@@ -152,8 +151,8 @@ fun AppRoot(
                         onUdpEngine = onUdpEngine,
                         logLevel = logLevel,
                         onLogLevel = onLogLevel,
-                        logRetention = logRetention,
-                        onLogRetention = onLogRetention,
+                        logEntryLimit = logEntryLimit,
+                        onLogEntryLimit = onLogEntryLimit,
                         autoPing = autoPing,
                         onAutoPing = onAutoPing,
                         vpnBehavior = vpnBehavior,

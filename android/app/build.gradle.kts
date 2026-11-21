@@ -16,6 +16,7 @@ android {
         targetSdk = 37
         versionCode = 5
         versionName = "2.2.4"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -102,7 +103,12 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
-    // Unit test JVM (LinkParser / XrayConfigBuilder / SmartImporter)
+    // JVM tests cover pure logic; device UI/persistence instrumentation runs in KVM-backed GitHub CI.
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

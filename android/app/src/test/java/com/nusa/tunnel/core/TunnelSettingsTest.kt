@@ -33,11 +33,14 @@ class TunnelSettingsTest {
     }
 
     @Test
-    fun `log retention choices use safe defaults for unknown stored values`() {
-        assertEquals(LogRetention.Standard, LogRetention.fromPreference(400))
-        assertEquals(LogRetention.Standard, LogRetention.fromPreference(999))
-        assertEquals(100, LogRetention.Compact.preferenceValue)
-        assertEquals(1_000, LogRetention.Extended.preferenceValue)
+    fun `log entry limit accepts only the reference range`() {
+        assertEquals(1_000, TunnelSettings.DEFAULT_LOG_ENTRY_LIMIT)
+        assertEquals(100, TunnelSettings.parseLogEntryLimit("100"))
+        assertEquals(400, TunnelSettings.parseLogEntryLimit(" 400 "))
+        assertEquals(10_000, TunnelSettings.parseLogEntryLimit("10000"))
+        listOf("", "99", "10001", "100000", "-100", "abc", "1.5").forEach {
+            assertNull("invalid log entry limit should be rejected: '$it'", TunnelSettings.parseLogEntryLimit(it))
+        }
     }
 
     @Test

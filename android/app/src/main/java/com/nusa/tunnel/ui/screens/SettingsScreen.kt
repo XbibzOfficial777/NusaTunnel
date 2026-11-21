@@ -3,6 +3,7 @@ package com.nusa.tunnel.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,6 +39,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,11 +49,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.BuildConfig
 import com.nusa.tunnel.core.EngineLogLevel
-import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.UdpTunnelEngine
@@ -73,8 +76,8 @@ fun SettingsScreen(
     onUdpEngine: (UdpTunnelEngine) -> Unit,
     logLevel: EngineLogLevel,
     onLogLevel: (EngineLogLevel) -> Unit,
-    logRetention: LogRetention,
-    onLogRetention: (LogRetention) -> Unit,
+    logEntryLimit: Int,
+    onLogEntryLimit: (Int) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
     vpnBehavior: VpnBehaviorSettings,
@@ -120,13 +123,9 @@ fun SettingsScreen(
                         onSelected = onLogLevel,
                     )
                     SettingsDivider()
-                    ChoiceRow(
-                        title = "Log entry limit",
-                        summary = "Jumlah entri log yang dipertahankan di memori. Perubahan langsung merapikan entri lama.",
-                        selected = logRetention.label,
-                        options = LogRetention.entries,
-                        optionLabel = { it.label },
-                        onSelected = onLogRetention,
+                    LogEntryLimitRow(
+                        value = logEntryLimit,
+                        onSave = onLogEntryLimit,
                     )
                 }
                 Spacer(Modifier.height(16.dp))
@@ -219,6 +218,7 @@ private fun VpnBehaviorPage(
             value = primaryDns,
             onValueChange = { primaryDns = it },
             label = "Primary DNS",
+            testTag = "vpn_primary_dns",
             valid = TunnelSettings.isValidIpv4Address(primaryDns),
             error = "Masukkan alamat IPv4 yang valid, misalnya 8.8.8.8.",
         )
@@ -227,6 +227,7 @@ private fun VpnBehaviorPage(
             value = fallbackDns,
             onValueChange = { fallbackDns = it },
             label = "Fallback DNS",
+            testTag = "vpn_fallback_dns",
             valid = TunnelSettings.isValidIpv4Address(fallbackDns),
             error = "Masukkan alamat IPv4 yang valid, misalnya 1.1.1.1.",
         )
@@ -238,6 +239,7 @@ private fun VpnBehaviorPage(
             value = mtuText,
             onValueChange = { mtuText = it.filter { character -> character.isDigit() }.take(4) },
             label = "MTU (1280–9000)",
+            testTag = "vpn_mtu",
             valid = mtu != null,
             error = "Masukkan MTU antara ${VpnBehaviorSettings.MIN_MTU} dan ${VpnBehaviorSettings.MAX_MTU}.",
             keyboardType = KeyboardType.Number,
@@ -261,7 +263,7 @@ private fun VpnBehaviorPage(
             )
         },
         enabled = dnsValid && mtu != null,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("save_vpn_behavior"),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
     ) {
@@ -276,6 +278,7 @@ private fun NumericOrIpField(
     label: String,
     valid: Boolean,
     error: String,
+    testTag: String,
     keyboardType: KeyboardType = KeyboardType.Ascii,
 ) {
     Column(
@@ -286,7 +289,7 @@ private fun NumericOrIpField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag(testTag),
             label = { Text(label) },
             isError = !valid,
             singleLine = true,
@@ -330,6 +333,112 @@ private fun SettingsActionRow(
             Text(summary, style = MaterialTheme.typography.bodySmall, color = FrostDim)
         }
         Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = FrostDim)
+    }
+}
+
+@Composable
+private fun LogEntryLimitRow(
+    value: Int,
+    onSave: (Int) -> Unit,
+) {
+    var dialogVisible by rememberSaveable { mutableStateOf(false) }
+    var draft by rememberSaveable { mutableStateOf(value.toString()) }
+    val parsedLimit = TunnelSettings.parseLogEntryLimit(draft)
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable {
+                draft = value.toString()
+                dialogVisible = true
+            }
+            .testTag("log_entry_limit_row")
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(end = 10.dp)) {
+            Text("Log entry limit", style = MaterialTheme.typography.titleSmall, color = Frost)
+            Spacer(Modifier.height(3.dp))
+            Text(
+                "$value entries · older entries are trimmed immediately",
+                style = MaterialTheme.typography.bodySmall,
+                color = FrostDim,
+            )
+        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = FrostDim)
+    }
+
+    if (dialogVisible) {
+        AlertDialog(
+            onDismissRequest = { dialogVisible = false },
+            title = { Text("Log entry limit") },
+            text = {
+                Column {
+                    Text(
+                        "Keep 100 to 10000 entries. Older entries beyond this limit are removed. " +
+                            "One entry can span several screen lines.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it.filter(Char::isDigit) },
+                        modifier = Modifier.fillMaxWidth().testTag("log_entry_limit_input"),
+                        label = { Text("Entries") },
+                        isError = parsedLimit == null,
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        supportingText = {
+                            if (parsedLimit == null) {
+                                Text("Enter a whole number from 100 to 10,000.")
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Spruce,
+                            unfocusedBorderColor = Color(0x44FFFFFF),
+                            errorBorderColor = Danger,
+                            focusedTextColor = Frost,
+                            unfocusedTextColor = Frost,
+                            errorTextColor = Frost,
+                            focusedLabelColor = Mint,
+                            unfocusedLabelColor = FrostDim,
+                            errorLabelColor = Danger,
+                            cursorColor = Spruce,
+                        ),
+                    )
+                }
+            },
+            confirmButton = {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { draft = TunnelSettings.DEFAULT_LOG_ENTRY_LIMIT.toString() },
+                        modifier = Modifier.testTag("reset_log_entry_limit"),
+                    ) { Text("Reset") }
+                    TextButton(
+                        onClick = { dialogVisible = false },
+                        modifier = Modifier.testTag("cancel_log_entry_limit"),
+                    ) { Text("Cancel") }
+                    TextButton(
+                        onClick = {
+                            parsedLimit?.let { limit ->
+                                onSave(limit)
+                                dialogVisible = false
+                            }
+                        },
+                        enabled = parsedLimit != null,
+                        modifier = Modifier.testTag("save_log_entry_limit"),
+                    ) { Text("Save") }
+                }
+            },
+            containerColor = Color(0xFF262932),
+            titleContentColor = Frost,
+            textContentColor = FrostDim,
+        )
     }
 }
 
