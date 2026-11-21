@@ -114,6 +114,8 @@ fun AppRoot(
     vpnAppRouting: VpnAppRoutingSettings,
     availableVpnApps: List<VpnAppInfo>,
     onVpnAppRouting: (VpnAppRoutingSettings) -> Unit,
+    onExportBackup: (CharArray) -> Unit,
+    onRestoreBackup: (CharArray) -> Unit,
     subUrl: String,
     onSubUrl: (String) -> Unit,
     subAuto: Boolean,
@@ -221,6 +223,8 @@ fun AppRoot(
                         vpnAppRouting = vpnAppRouting,
                         availableVpnApps = availableVpnApps,
                         onVpnAppRouting = onVpnAppRouting,
+                        onExportBackup = onExportBackup,
+                        onRestoreBackup = onRestoreBackup,
                     )
                     Dest.Logs -> LogsScreen()
                 }

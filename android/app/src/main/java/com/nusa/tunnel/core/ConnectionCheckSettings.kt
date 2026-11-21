@@ -1,8 +1,10 @@
 package com.nusa.tunnel.core
 
 import java.net.URI
+import kotlinx.serialization.Serializable
 
 /** Persisted schedule and policy for real HTTP(S) checks through the active local Xray SOCKS proxy. */
+@Serializable
 data class ConnectionCheckSettings(
     val enabled: Boolean = false,
     val url: String = DEFAULT_URL,

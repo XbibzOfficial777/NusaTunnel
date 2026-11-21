@@ -8,8 +8,11 @@ import android.os.Bundle
 import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -25,6 +28,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.nusa.tunnel.core.ConnectionCheckSettings
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LinkParser
+import com.nusa.tunnel.core.NusaTunnelBackup
+import com.nusa.tunnel.core.NusaTunnelBackupException
 import com.nusa.tunnel.core.ServerStore
 import com.nusa.tunnel.core.SmartImporter
 import com.nusa.tunnel.core.SpeedUnit
@@ -41,6 +46,7 @@ import com.nusa.tunnel.service.TunnelVpnService
 import com.nusa.tunnel.ui.AppRoot
 import com.nusa.tunnel.ui.Dest
 import com.nusa.tunnel.ui.theme.NusaTunnelTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -96,6 +102,103 @@ class MainActivity : ComponentActivity() {
         setContent {
             NusaTunnelTheme {
                 val scope = rememberCoroutineScope()
+                var pendingExportPassphrase by remember { mutableStateOf<CharArray?>(null) }
+                var pendingRestorePassphrase by remember { mutableStateOf<CharArray?>(null) }
+                DisposableEffect(Unit) {
+                    onDispose {
+                        pendingExportPassphrase?.fill('\u0000')
+                        pendingRestorePassphrase?.fill('\u0000')
+                    }
+                }
+                val backupExportLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("application/json"),
+                ) { uri ->
+                    val passphrase = pendingExportPassphrase
+                    pendingExportPassphrase = null
+                    if (uri == null || passphrase == null) {
+                        passphrase?.fill('\u0000')
+                    } else {
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    val output = contentResolver.openOutputStream(uri)
+                                        ?: throw NusaTunnelBackupException("Tidak dapat menulis ke lokasi pilihan.")
+                                    output.use {
+                                        NusaTunnelBackup.export(applicationContext, store, it, passphrase)
+                                    }
+                                }
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Backup terenkripsi berhasil disimpan",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            } catch (failure: CancellationException) {
+                                throw failure
+                            } catch (failure: Exception) {
+                                val message = (failure as? NusaTunnelBackupException)?.userMessage
+                                    ?: "Backup tidak dapat disimpan. Periksa ruang dan izin penyimpanan."
+                                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                            } finally {
+                                passphrase.fill('\u0000')
+                            }
+                        }
+                    }
+                }
+                val backupRestoreLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument(),
+                ) { uri ->
+                    val passphrase = pendingRestorePassphrase
+                    pendingRestorePassphrase = null
+                    if (uri == null || passphrase == null) {
+                        passphrase?.fill('\u0000')
+                    } else {
+                        scope.launch {
+                            val currentState = TunnelManager.status.value.state
+                            if (currentState == TunnelState.Connected ||
+                                currentState == TunnelState.Connecting ||
+                                currentState == TunnelState.Disconnecting
+                            ) {
+                                passphrase.fill('\u0000')
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Putuskan VPN sebelum memulihkan backup",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                return@launch
+                            }
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    val input = contentResolver.openInputStream(uri)
+                                        ?: throw NusaTunnelBackupException("Berkas backup tidak dapat dibaca.")
+                                    input.use {
+                                        NusaTunnelBackup.restore(applicationContext, store, it, passphrase)
+                                    }
+                                }
+                                TunnelManager.setLogEntryLimit(
+                                    TunnelSettings.logEntryLimit(applicationContext),
+                                )
+                                TunnelManager.onConnectionCheckSettingsChanged(
+                                    applicationContext,
+                                    TunnelSettings.connectionCheck(applicationContext),
+                                )
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Backup dipulihkan. Aplikasi dimuat ulang untuk menerapkan pengaturan.",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                recreate()
+                            } catch (failure: CancellationException) {
+                                throw failure
+                            } catch (failure: Exception) {
+                                val message = (failure as? NusaTunnelBackupException)?.userMessage
+                                    ?: "Backup tidak dapat dipulihkan; data sebelumnya tidak diubah."
+                                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                            } finally {
+                                passphrase.fill('\u0000')
+                            }
+                        }
+                    }
+                }
                 var dest by rememberSaveable { mutableStateOf(Dest.Dashboard) }
                 val servers by store.servers.collectAsState(initial = emptyList())
                 val selectedId by store.selectedId.collectAsState(initial = null)
@@ -342,6 +445,31 @@ class MainActivity : ComponentActivity() {
                                 "Pilih aplikasi yang valid; mode aplikasi terpilih memerlukan minimal satu aplikasi",
                                 Toast.LENGTH_LONG,
                             ).show()
+                        }
+                    },
+                    onExportBackup = { passphrase ->
+                        pendingExportPassphrase?.fill('\u0000')
+                        pendingExportPassphrase = passphrase
+                        backupExportLauncher.launch(
+                            "NusaTunnel-backup-${System.currentTimeMillis()}${NusaTunnelBackup.FILE_SUFFIX}",
+                        )
+                    },
+                    onRestoreBackup = { passphrase ->
+                        val currentState = TunnelManager.status.value.state
+                        if (currentState == TunnelState.Connected ||
+                            currentState == TunnelState.Connecting ||
+                            currentState == TunnelState.Disconnecting
+                        ) {
+                            passphrase.fill('\u0000')
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Putuskan VPN sebelum memulihkan backup",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        } else {
+                            pendingRestorePassphrase?.fill('\u0000')
+                            pendingRestorePassphrase = passphrase
+                            backupRestoreLauncher.launch(arrayOf("application/json", "application/octet-stream"))
                         }
                     },
                     subUrl = subUrl ?: "",

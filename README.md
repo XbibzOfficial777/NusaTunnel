@@ -8,6 +8,8 @@ backend logika **Python stdlib murni**. Versi Android (Kotlin + Jetpack Compose)
 `android/`; dukungan protokol dan fitur Android dicatat terpisah dari desktop di
 [`docs/android-support-matrix.md`](docs/android-support-matrix.md).
 
+> **Peringatan penting untuk pengguna Android sideload v2.2.5:** v2.2.6 memakai sertifikat penandatanganan baru, sehingga Android tidak akan menerima update langsung di atas v2.2.5. Versi 2.2.5 belum memiliki ekspor backup; profil/pengaturan lama tidak bisa dipindahkan oleh fitur backup baru. Sebelum menghapus aplikasi lama, siapkan ulang tautan/kredensial profil dan URL subscription dari sumber asal. Jika tidak punya sumber konfigurasi, jangan uninstall dulu. Lihat [`panduan migrasi`](docs/android-signing-rotation-user-notice.md).
+
 ## Fitur
 
 - Protokol nyata via Xray-core: VMess, VLESS, Trojan, Shadowsocks
@@ -28,7 +30,7 @@ Semua installer ada di tab **Releases**:
 | Windows 10/11 (x64) | `NusaTunnel-<versi>-Windows-x64.zip` |
 | macOS Apple Silicon | `NusaTunnel-<versi>-macOS-AppleSilicon.zip` |
 | macOS Intel | `NusaTunnel-<versi>-macOS-Intel.zip` |
-| Android (universal, 4 ABI) | `NusaTunnel-v2.2.5-universal.apk` |
+| Android (universal, 4 ABI) | `NusaTunnel-v2.2.6-universal.apk` |
 
 ## Struktur repo
 

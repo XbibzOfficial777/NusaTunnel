@@ -10,10 +10,10 @@ The user approved key rotation. This repository change removes the old keystore 
 
 Before any release:
 
-1. Do not generate or replace the configured key casually. Ensure the signing identity has a protected recovery plan; any additional backup must remain outside the repository and must not be pasted into issues, commits, or chat. Never reuse the exposed key.
+1. Do not generate or replace the configured key casually. The current keystore exists only in write-only GitHub Actions secrets; it cannot be downloaded again, and no independent offline copy was created. Establish a protected recovery plan before release. If that requires replacing the unrecoverable key, generate a new identity only with a separately secured keystore copy ready before provisioning. Keep any backup outside the repository and never paste key material/passwords into issues, commits, or chat. Never reuse the exposed key.
 2. In repository **Settings → Secrets and variables → Actions**, verify only the names (not values) of `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`; verify `ANDROID_KEY_CERT_SHA256` exists as a repository variable. Secret values cannot be read back through GitHub's API.
 3. Verify the configured fingerprint against the new certificate during a signed release build; it is checked against every release APK.
-4. Decide and test migration for current v2.2.5 installs. A fresh key is not accepted as an in-place update of APKs signed by the old key without a supported signing lineage. A clean reinstall can erase app data; no tested export/restore path is evidenced yet. Do not publish until data migration/backup and the user notice are implemented, tested, and approved.
+4. For sideloaded v2.2.5 users, the user has accepted manual reconfiguration: v2.2.5 cannot be updated in place with the rotated key and has no export feature, so its local profiles/settings cannot be moved by the new 2.2.6 backup UI. Publish the prominent notice in `README.md` and `docs/android-signing-rotation-user-notice.md` before tagging; tell users to recover original profile links/credentials and subscription URLs before uninstalling, and not to uninstall if they cannot reconstruct them. The encrypted 2.2.6 backup only protects migrations from 2.2.6 onward and must pass export/restore tests.
 5. Increment `versionCode`/`versionName` and add matching `docs/release-notes-v<VERSION>.md`; do not retag or overwrite an existing release.
 
 ## Pipeline gates
@@ -33,8 +33,8 @@ Normal Android CI builds may use the debug signing key only to prove that the re
 
 - The rotated keystore secrets and certificate-fingerprint variable are provisioned, but the release workflow has not yet verified a signed release APK; no separate offline key backup is documented.
 - The old private key remains present in public Git history. The current tree is being cleaned; history purge/revocation and distribution-channel notice need owner coordination.
-- Existing-install migration/data backup has not been implemented or tested for a signing-key change.
+- The v2.2.5 manual-reconfiguration warning must be merged into the public main branch before any tag; do not claim its app-local profiles/settings are preserved. The new encrypted backup must pass tests for v2.2.6-and-later migrations.
 - The feature ledger is still partial: SSH/HCR, SlowDNS, complete Xray profile/routing editors, OpenVPN, Psiphon, Share Net, response checker, and additional screenshot controls remain incomplete. A green build does not clear those parity blockers.
-- The AndroidX splash-screen handoff, Compose motion polish, and `UiMotionKvmTest` have not yet been assembled or run. Verify them through the remote Android CI and KVM instrumentation workflow before release.
+- The new encrypted backup/restore code, migration KVM test, 2.2.6 version bump, and release notice have not yet passed remote CI. Run the full Android CI and fail-closed KVM instrumentation on the final candidate before release.
 - Live Xray/VpnService TUN traffic assertions and physical-device behavior remain unverified. No release may claim these are verified.
 - Remote GitHub Actions must pass for the final commit and draft release. Do not build/test the Android app in the local sandbox, and do not push a release tag or publish until all required checks and user-facing migration steps are ready.

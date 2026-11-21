@@ -1,6 +1,7 @@
 package com.nusa.tunnel.core
 
 import android.content.Context
+import kotlinx.serialization.Serializable
 
 /** TUN packet processor. Hev is the requested default; Xray remains a selectable fallback. */
 enum class UdpTunnelEngine(val preferenceValue: String, val label: String) {
@@ -31,6 +32,7 @@ enum class EngineLogLevel(
 }
 
 /** Settings consumed by Android VpnService and the active Xray/Hev packet path. */
+@Serializable
 data class VpnBehaviorSettings(
     val primaryDns: String = DEFAULT_PRIMARY_DNS,
     val fallbackDns: String = DEFAULT_FALLBACK_DNS,
@@ -46,6 +48,23 @@ data class VpnBehaviorSettings(
         const val MAX_MTU = 9000
     }
 }
+
+/** Explicit, versioned backup representation for all persisted user-facing Android settings. */
+@Serializable
+data class TunnelSettingsBackup(
+    val socksPort: Int,
+    val snifferEnabled: Boolean,
+    val udpEngine: String,
+    val logLevel: String,
+    val logEntryLimit: Int,
+    val speedUnit: String,
+    val autoPing: Boolean,
+    val keepCpuAwake: Boolean,
+    val vpnBehavior: VpnBehaviorSettings,
+    val vpnAppMode: String,
+    val vpnAppPackages: List<String>,
+    val connectionCheck: ConnectionCheckSettings,
+)
 
 /** Persisted app settings shared by the Compose UI and the VPN service. */
 object TunnelSettings {
@@ -267,6 +286,70 @@ object TunnelSettings {
 
     fun setAutoPingEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_AUTO_PING, enabled).apply()
+    }
+
+    fun backupSnapshot(context: Context): TunnelSettingsBackup {
+        val routing = vpnAppRouting(context)
+        return TunnelSettingsBackup(
+            socksPort = socksPort(context),
+            snifferEnabled = snifferEnabled(context),
+            udpEngine = udpTunnelEngine(context).preferenceValue,
+            logLevel = logLevel(context).preferenceValue,
+            logEntryLimit = logEntryLimit(context),
+            speedUnit = speedUnit(context).preferenceValue,
+            autoPing = autoPingEnabled(context),
+            keepCpuAwake = keepCpuAwake(context),
+            vpnBehavior = vpnBehavior(context),
+            vpnAppMode = routing.mode.preferenceValue,
+            vpnAppPackages = routing.selectedPackages.sorted(),
+            connectionCheck = connectionCheck(context),
+        )
+    }
+
+    fun isValidBackupSnapshot(snapshot: TunnelSettingsBackup, ownerPackage: String): Boolean {
+        val vpnMode = VpnAppRoutingMode.entries.firstOrNull {
+            it.preferenceValue == snapshot.vpnAppMode
+        } ?: return false
+        return snapshot.socksPort in 1..65_535 &&
+            UdpTunnelEngine.entries.any { it.preferenceValue == snapshot.udpEngine } &&
+            EngineLogLevel.entries.any { it.preferenceValue == snapshot.logLevel } &&
+            snapshot.logEntryLimit in MIN_LOG_ENTRY_LIMIT..MAX_LOG_ENTRY_LIMIT &&
+            SpeedUnit.entries.any { it.preferenceValue == snapshot.speedUnit } &&
+            isValidIpv4Address(snapshot.vpnBehavior.primaryDns) &&
+            isValidIpv4Address(snapshot.vpnBehavior.fallbackDns) &&
+            snapshot.vpnBehavior.mtu in VpnBehaviorSettings.MIN_MTU..VpnBehaviorSettings.MAX_MTU &&
+            snapshot.vpnAppPackages.size <= MAX_SELECTED_VPN_APPS &&
+            snapshot.vpnAppPackages.distinct().size == snapshot.vpnAppPackages.size &&
+            snapshot.vpnAppPackages.all { VpnAppRoutingPlanner.isValidPackageName(it) } &&
+            ownerPackage !in snapshot.vpnAppPackages &&
+            (vpnMode != VpnAppRoutingMode.SelectedOnly || snapshot.vpnAppPackages.isNotEmpty()) &&
+            ConnectionCheckSettingsValidator.isValid(snapshot.connectionCheck)
+    }
+
+    /** Replace backed-up app settings without deleting unrelated internal preferences. */
+    fun restoreBackupSnapshot(context: Context, snapshot: TunnelSettingsBackup): Boolean {
+        if (!isValidBackupSnapshot(snapshot, context.applicationContext.packageName)) return false
+        return prefs(context).edit()
+            .putInt(KEY_SOCKS_PORT, snapshot.socksPort)
+            .putBoolean(KEY_SNIFFER_ENABLED, snapshot.snifferEnabled)
+            .putString(KEY_UDP_ENGINE, snapshot.udpEngine)
+            .putString(KEY_LOG_LEVEL, snapshot.logLevel)
+            .putInt(KEY_LOG_RETENTION, snapshot.logEntryLimit)
+            .putString(KEY_SPEED_UNIT, snapshot.speedUnit)
+            .putBoolean(KEY_AUTO_PING, snapshot.autoPing)
+            .putBoolean(KEY_KEEP_CPU_AWAKE, snapshot.keepCpuAwake)
+            .putString(KEY_VPN_PRIMARY_DNS, snapshot.vpnBehavior.primaryDns)
+            .putString(KEY_VPN_FALLBACK_DNS, snapshot.vpnBehavior.fallbackDns)
+            .putInt(KEY_VPN_MTU, snapshot.vpnBehavior.mtu)
+            .putString(KEY_VPN_APP_MODE, snapshot.vpnAppMode)
+            .putStringSet(KEY_VPN_APP_PACKAGES, snapshot.vpnAppPackages.toSet())
+            .putBoolean(KEY_CONNECTION_CHECK_ENABLED, snapshot.connectionCheck.enabled)
+            .putString(KEY_CONNECTION_CHECK_URL, snapshot.connectionCheck.url)
+            .putInt(KEY_CONNECTION_CHECK_INTERVAL, snapshot.connectionCheck.intervalSeconds)
+            .putInt(KEY_CONNECTION_CHECK_TIMEOUT, snapshot.connectionCheck.timeoutSeconds)
+            .putInt(KEY_CONNECTION_CHECK_ATTEMPTS, snapshot.connectionCheck.maxAttempts)
+            .putBoolean(KEY_CONNECTION_CHECK_STOP_ON_FAILURE, snapshot.connectionCheck.stopOnFailure)
+            .commit()
     }
 
     private fun prefs(context: Context) =
