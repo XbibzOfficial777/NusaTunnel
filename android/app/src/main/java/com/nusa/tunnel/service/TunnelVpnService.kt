@@ -103,20 +103,15 @@ class TunnelVpnService : VpnService() {
             synchronized(engineLifecycleLock) {
                 if (cleanupStarted.get()) return@synchronized
                 closeInterface()
-                val vpnBehavior = TunnelSettings.vpnBehavior(this)
                 val builder = Builder()
                     .setSession("NusaTunnel")
-                    .setMtu(vpnBehavior.mtu)
+                    .setMtu(1500)
                     .addAddress("10.10.14.1", 30)
                     .addAddress("fc00::10:10:14:1", 126)
                     .addRoute("0.0.0.0", 0)
                     .addRoute("::", 0)
-                    .addDnsServer(vpnBehavior.primaryDns)
-                    .apply {
-                        if (vpnBehavior.fallbackDns != vpnBehavior.primaryDns) {
-                            addDnsServer(vpnBehavior.fallbackDns)
-                        }
-                    }
+                    .addDnsServer("1.1.1.1")
+                    .addDnsServer("8.8.8.8")
                     // AndroidLibXrayLite startLoop() does not expose VpnService.protect(fd).
                     // Exclude this app so Xray's upstream sockets cannot loop into the TUN.
                     .addDisallowedApplication(packageName)
@@ -181,11 +176,7 @@ class TunnelVpnService : VpnService() {
 
                     if (engine == UdpTunnelEngine.HevSocks5Tunnel) {
                         startHevTunnel(hevConfig.ifBlank {
-                            HevConfigBuilder.build(
-                                tunManagerPort(),
-                                TunnelSettings.logLevel(this),
-                                TunnelSettings.vpnBehavior(this).mtu,
-                            )
+                            HevConfigBuilder.build(tunManagerPort(), TunnelSettings.logLevel(this))
                         }, tunFd)
                         startHevMonitor()
                     }

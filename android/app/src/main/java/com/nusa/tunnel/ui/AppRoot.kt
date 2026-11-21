@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.UdpTunnelEngine
-import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.screens.DashboardScreen
 import com.nusa.tunnel.ui.screens.LogsScreen
 import com.nusa.tunnel.ui.screens.ServersScreen
@@ -74,8 +73,6 @@ fun AppRoot(
     onLogRetention: (LogRetention) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
-    vpnBehavior: VpnBehaviorSettings,
-    onVpnBehavior: (VpnBehaviorSettings) -> Unit,
     subUrl: String,
     onSubUrl: (String) -> Unit,
     subAuto: Boolean,
@@ -156,8 +153,6 @@ fun AppRoot(
                         onLogRetention = onLogRetention,
                         autoPing = autoPing,
                         onAutoPing = onAutoPing,
-                        vpnBehavior = vpnBehavior,
-                        onVpnBehavior = onVpnBehavior,
                     )
                     Dest.Logs -> LogsScreen()
                 }

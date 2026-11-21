@@ -20,9 +20,9 @@ enum class EngineLogLevel(
     val xrayValue: String,
     val hevValue: String,
 ) {
-    Error("error", "Essential", "error", "error"),
-    Warning("warning", "Normal", "warning", "warn"),
-    Verbose("verbose", "Detailed", "debug", "debug");
+    Warning("warning", "Warning", "warning", "warn"),
+    Verbose("verbose", "Verbose", "debug", "debug"),
+    Error("error", "Error", "error", "error");
 
     companion object {
         fun fromPreference(value: String?): EngineLogLevel =
@@ -42,23 +42,6 @@ enum class LogRetention(val preferenceValue: Int, val label: String) {
     }
 }
 
-/** Settings consumed by Android VpnService and the active Xray/Hev packet path. */
-data class VpnBehaviorSettings(
-    val primaryDns: String = DEFAULT_PRIMARY_DNS,
-    val fallbackDns: String = DEFAULT_FALLBACK_DNS,
-    val mtu: Int = DEFAULT_MTU,
-) {
-    val dnsServers: List<String> get() = listOf(primaryDns, fallbackDns).distinct()
-
-    companion object {
-        const val DEFAULT_PRIMARY_DNS = "8.8.8.8"
-        const val DEFAULT_FALLBACK_DNS = "1.1.1.1"
-        const val DEFAULT_MTU = 1500
-        const val MIN_MTU = 1280
-        const val MAX_MTU = 9000
-    }
-}
-
 /** Persisted app settings shared by the Compose UI and the VPN service. */
 object TunnelSettings {
     const val DEFAULT_SOCKS_PORT = 10808
@@ -70,58 +53,9 @@ object TunnelSettings {
     private const val KEY_AUTO_PING = "auto_ping_selected_server"
     private const val KEY_SOCKS_PORT = "socks_port"
     private const val KEY_SNIFFER_ENABLED = "sniffer_enabled"
-    private const val KEY_VPN_PRIMARY_DNS = "vpn_primary_dns"
-    private const val KEY_VPN_FALLBACK_DNS = "vpn_fallback_dns"
-    private const val KEY_VPN_MTU = "vpn_mtu"
 
     fun parseSocksPort(value: String): Int? =
         value.trim().toIntOrNull()?.takeIf { it in 1..65_535 }
-
-    fun isValidIpv4Address(value: String): Boolean {
-        val parts = value.trim().split('.')
-        if (parts.size != 4) return false
-        return parts.all { part ->
-            part.isNotEmpty() && !(part.length > 1 && part.startsWith('0')) &&
-                part.toIntOrNull()?.let { it in 0..255 } == true
-        }
-    }
-
-    fun parseVpnMtu(value: String): Int? =
-        value.trim().toIntOrNull()?.takeIf {
-            it in VpnBehaviorSettings.MIN_MTU..VpnBehaviorSettings.MAX_MTU
-        }
-
-    fun vpnBehavior(context: Context): VpnBehaviorSettings {
-        val preferences = prefs(context)
-        val primary = preferences.getString(
-            KEY_VPN_PRIMARY_DNS,
-            VpnBehaviorSettings.DEFAULT_PRIMARY_DNS,
-        ).orEmpty().takeIf(::isValidIpv4Address)
-            ?: VpnBehaviorSettings.DEFAULT_PRIMARY_DNS
-        val fallback = preferences.getString(
-            KEY_VPN_FALLBACK_DNS,
-            VpnBehaviorSettings.DEFAULT_FALLBACK_DNS,
-        ).orEmpty().takeIf(::isValidIpv4Address)
-            ?: VpnBehaviorSettings.DEFAULT_FALLBACK_DNS
-        val mtu = preferences.getInt(KEY_VPN_MTU, VpnBehaviorSettings.DEFAULT_MTU)
-            .takeIf { it in VpnBehaviorSettings.MIN_MTU..VpnBehaviorSettings.MAX_MTU }
-            ?: VpnBehaviorSettings.DEFAULT_MTU
-        return VpnBehaviorSettings(primary, fallback, mtu)
-    }
-
-    /** Rejects invalid DNS/MTU input without changing the previously saved VPN behavior. */
-    fun setVpnBehavior(context: Context, settings: VpnBehaviorSettings): Boolean {
-        if (!isValidIpv4Address(settings.primaryDns) ||
-            !isValidIpv4Address(settings.fallbackDns) ||
-            settings.mtu !in VpnBehaviorSettings.MIN_MTU..VpnBehaviorSettings.MAX_MTU
-        ) return false
-        prefs(context).edit()
-            .putString(KEY_VPN_PRIMARY_DNS, settings.primaryDns.trim())
-            .putString(KEY_VPN_FALLBACK_DNS, settings.fallbackDns.trim())
-            .putInt(KEY_VPN_MTU, settings.mtu)
-            .apply()
-        return true
-    }
 
     fun socksPort(context: Context): Int =
         prefs(context).getInt(KEY_SOCKS_PORT, DEFAULT_SOCKS_PORT)

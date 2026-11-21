@@ -41,24 +41,8 @@ class TunnelSettingsTest {
     }
 
     @Test
-    fun `VPN behavior validation accepts numeric IPv4 DNS and safe MTU range only`() {
-        assertTrue(TunnelSettings.isValidIpv4Address("8.8.8.8"))
-        assertTrue(TunnelSettings.isValidIpv4Address("0.0.0.0"))
-        listOf("", "8.8.8", "256.1.1.1", "1.2.3.999", "01.2.3.4", "dns.google").forEach {
-            assertEquals("invalid DNS address: $it", false, TunnelSettings.isValidIpv4Address(it))
-        }
-        assertEquals(1280, TunnelSettings.parseVpnMtu("1280"))
-        assertEquals(1500, TunnelSettings.parseVpnMtu("1500"))
-        assertEquals(9000, TunnelSettings.parseVpnMtu("9000"))
-        listOf("1279", "9001", "", "abc").forEach {
-            assertNull("invalid MTU: $it", TunnelSettings.parseVpnMtu(it))
-        }
-    }
-
-    @Test
-    fun `Hev config uses selected SOCKS port UDP relay log severity and MTU`() {
-        val config = HevConfigBuilder.build(10999, EngineLogLevel.Verbose, mtu = 1420)
-        assertTrue(config.contains("mtu: 1420"))
+    fun `Hev config uses selected SOCKS port UDP relay and log severity`() {
+        val config = HevConfigBuilder.build(10999, EngineLogLevel.Verbose)
         assertTrue(config.contains("address: 127.0.0.1"))
         assertTrue(config.contains("port: 10999"))
         assertTrue(config.contains("udp: 'udp'"))

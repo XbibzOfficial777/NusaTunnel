@@ -243,27 +243,6 @@ class XrayConfigBuilderTest {
     }
 
     @Test
-    fun `VPN MTU and selected DNS are emitted into the actual Xray config`() {
-        val root = Json.parseToJsonElement(
-            XrayConfigBuilder.build(
-                vmess,
-                10808,
-                mtu = 1420,
-                dnsServers = listOf("9.9.9.9", "1.0.0.1"),
-            ),
-        ).jsonObject
-        val tunSettings = root["inbounds"]!!.jsonArray[0].jsonObject["settings"]!!.jsonObject
-        assertEquals(1420, (tunSettings["MTU"] as JsonPrimitive).content.toInt())
-        val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
-        assertEquals(listOf("9.9.9.9", "1.0.0.1"), dnsServers.map { (it as JsonPrimitive).content })
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun `Xray config rejects hostnames masquerading as VPN DNS IP addresses`() {
-        XrayConfigBuilder.build(vmess, 10808, dnsServers = listOf("dns.example.com"))
-    }
-
-    @Test
     fun `buildProxyOnly - tanpa inbound, log none`() {
         val root = Json.parseToJsonElement(XrayConfigBuilder.buildProxyOnly(trojan)).jsonObject
         assertTrue((root["inbounds"] as JsonArray).isEmpty())

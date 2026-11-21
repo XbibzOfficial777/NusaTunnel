@@ -17,18 +17,7 @@ object XrayConfigBuilder {
         snifferEnabled: Boolean = true,
         includeTunInbound: Boolean = true,
         logLevel: String = "warning",
-        mtu: Int = VpnBehaviorSettings.DEFAULT_MTU,
-        dnsServers: List<String> = listOf(
-            VpnBehaviorSettings.DEFAULT_PRIMARY_DNS,
-            VpnBehaviorSettings.DEFAULT_FALLBACK_DNS,
-        ),
     ): String {
-        require(mtu in VpnBehaviorSettings.MIN_MTU..VpnBehaviorSettings.MAX_MTU) {
-            "VPN MTU must be ${VpnBehaviorSettings.MIN_MTU}..${VpnBehaviorSettings.MAX_MTU}"
-        }
-        require(dnsServers.isNotEmpty() && dnsServers.all { TunnelSettings.isValidIpv4Address(it) }) {
-            "Xray DNS servers must be valid IPv4 addresses"
-        }
         val safeLogLevel = logLevel.lowercase().takeIf {
             it in setOf("debug", "info", "warning", "error", "none")
         } ?: "warning"
@@ -45,7 +34,7 @@ object XrayConfigBuilder {
                 put("protocol", "tun")
                 put("settings", buildJsonObject {
                     put("name", "nusatun0")
-                    put("MTU", mtu)
+                    put("MTU", 1500)
                     put("userLevel", 8)
                 })
                 put("sniffing", sniffing)
@@ -104,7 +93,7 @@ object XrayConfigBuilder {
             put("outbounds", outbounds)
             put("dns", buildJsonObject {
                 putJsonArray("servers") {
-                    dnsServers.distinct().forEach { add(it) }
+                    add("1.1.1.1"); add("8.8.8.8"); add("localhost")
                 }
             })
             put("routing", buildJsonObject {
