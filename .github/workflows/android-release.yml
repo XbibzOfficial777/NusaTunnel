@@ -220,7 +220,8 @@ jobs:
           name: NusaTunnel ${{ env.VERSION }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: docs/release-notes-v${{ env.VERSION }}.md
+          generate_release_notes: false
           files: |
             android/app/build/outputs/apk/nusaRelease/NusaTunnel-v${{ env.VERSION }}-arm64-v8a.apk
             android/app/build/outputs/apk/nusaRelease/NusaTunnel-v${{ env.VERSION }}-armeabi-v7a.apk

@@ -1,12 +1,12 @@
 # Android HTTP Custom parity roadmap
 
-**Baseline:** `main` at `dac9fbcf665aea1e091a959b3216486a1be3f35a` (Phase 1 merged through PR [#1](https://github.com/XbibzOfficial777/NusaTunnel/pull/1), 2026-11-21).
+**Baseline:** `main` at `5f89def395e7905016b4b7a7f915a588560b89be` (Phase 1 through PR [#1](https://github.com/XbibzOfficial777/NusaTunnel/pull/1) and KVM/log-limit work through PR [#2](https://github.com/XbibzOfficial777/NusaTunnel/pull/2), 2026-11-21).
 
 **Reference:** all 38 supplied screenshots under `ISI SETTINGS` and `BACA.TXT`. The item-by-item source/feature/runtime/test mapping is [`http-custom-reference-matrix.md`](http-custom-reference-matrix.md); it is the authoritative omission check.
 
 **Prior verification:** merged PR CI [44882508257](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44882508257) passed its unit tests, live subscription smoke test, release APK assembly/size report, and Xray-core config validation. That run did **not** boot Android.
 
-**Current follow-up:** branch `settings-parity-kvm-emulator` adds a KVM-gated x86_64 Android emulator job. Runs [44883875004](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44883875004), [44884293254](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44884293254), and [44884773232](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44884773232) successively exposed and fixed SDK setup issues. Run [44885075397](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44885075397) booted the emulator but failed resolving two Maven artifacts; Google's official Maven Central mirror fixed that. Run [44885399758](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44885399758) passed the existing JVM/config/release checks and three DNS/MTU instrumentation tests. Run [44886470982](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44886470982) caught an unsupported Compose `assertExists` test matcher; it was replaced with `assertIsDisplayed`. Latest run [44887021779](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44887021779) passed both jobs: JVM/config/live-subscription/release checks and four KVM instrumentation tests (DNS/MTU persistence/validation plus log-limit save/reset/cancel/rejection/activity recreation). Unit tests also exercise 100–10,000 bounds and actual entry-based buffer trimming. No live VPN routing or leak behavior is established by these settings tests. Full HTTP Custom parity is **not implemented**; no release is authorized by this roadmap.
+**Release candidate:** PR #2 merged into `main` at `5f89def`. Post-merge run [44889231145](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44889231145) passed both Android CI jobs; its KVM tests cover settings UI/preferences, not live VPN traffic. The log cap is validated at 100–10,000 and trims the real in-memory entry buffer. Version 2.2.5 is being prepared as an explicitly incremental release; full HTTP Custom parity is **not implemented**, and VPN routing/DNS/leak behavior remains unverified.
 
 ## Non-negotiable acceptance rule — no simulation
 
@@ -46,7 +46,7 @@ See the matrix for exact screenshot filenames, each distinct visible item, curre
 
 - The General / Connection / Tunnel settings hierarchy and the first real VPN Behavior page are merged in `dac9fbc`.
 - Existing Android DNS and MTU values are validated/persisted and consumed by Android `VpnService.Builder`, Xray TUN config and Hev config on the next connection. IPv6 remains routed through the VPN; no IPv6-off switch until packet blocking is validated without leakage.
-- The earlier merged CI run passed JVM/config/release checks but had no Android virtual device. The follow-up KVM job fixed SDK bootstrap and Maven mirror issues. Run 44885399758 passed the original three DNS/MTU Compose tests. Run 44886470982 caught an unsupported Compose `assertExists` matcher; after replacing it with `assertIsDisplayed`, run [44887021779](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44887021779) passed both CI jobs and all four KVM instrumentation tests, including the new log-limit persistence/recreation/validation path. This verifies settings UI behavior only, not live VPN routing or traffic safety.
+- The KVM follow-up is merged in PR #2. Post-merge run [44889231145](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44889231145) passed unit/config/live-subscription/release assembly and KVM instrumentation. The four instrumented cases cover valid DNS/MTU persistence, invalid DNS/MTU rejection, and numeric log-limit save/reset/cancel/rejection/activity recreation. This verifies settings UI behavior only, not live VPN routing or traffic safety.
 - Phase 1 is not full Settings parity; General/Connection/Tunnel controls absent from the app remain absent.
 
 ### Phase 2 — SSH, proxy/payload and HCR
@@ -76,7 +76,7 @@ See the matrix for exact screenshot filenames, each distinct visible item, curre
 
 ### Phase 6 — remaining General, Connection, UDP and diagnostics
 
-- A numeric log-entry cap (100–10,000) with Reset/Cancel/Save, persistent preference, and actual entry-based buffer trimming is implemented on the current follow-up branch. JVM range/buffer tests and KVM save/reset/cancel/rejection/activity-recreation coverage passed in run 44887021779. Remaining General preferences (language/theme/dynamic color, speed unit), payload buffers/load balancing and SOCKS/BadVPN/UDPGW choices still need real consumers before exposure.
+- The numeric log-entry cap (100–10,000) with Reset/Cancel/Save, persistent preference, and actual entry-based buffer trimming is implemented on `main`; JVM and KVM coverage passed in post-merge run 44889231145. Remaining General preferences (language/theme/dynamic color, speed unit), payload buffers/load balancing and SOCKS/BadVPN/UDPGW choices still need real consumers before exposure.
 - Implement per-app VPN, connection-check URL/interval/timeout/attempt/stop policy, richer Auto Ping, connection properties/reconnect limits, Share Net local HTTP proxy/authentication/reach modes, and UDP Custom parameters. Validate lifecycle, port conflicts, credential protection, no-leak behavior and observable status.
 - Implement the response checker for HTTP/SNI/UDP/DNS with direct/manual proxy, custom headers/body, cancellation and structured results. Verify each mode against controlled services.
 - Hardware ID/Access ID: keep the reference row explicitly blocked until the product owner supplies or approves the authorization endpoint, request/response contract, identity lifetime and privacy policy. Never make “Get ID” report success against a fake/local-only service.
@@ -91,7 +91,7 @@ See the matrix for exact screenshot filenames, each distinct visible item, curre
 
 ## Current Android support boundary
 
-As merged, Android has VMess, VLESS, Trojan and Shadowsocks through Xray; Hev and Xray-native TUN choices; a validated/persisted local SOCKS port; Xray sniffing; engine log level and fixed in-memory log retention; limited foreground/offline Auto Ping; and persisted VPN DNS/MTU consumed by Android/Xray/Hev on the next connection. The current follow-up branch replaces fixed log retention with the reference's 100–10,000 numeric cap; the JVM/KVM acceptance checks passed remotely in run 44887021779. Exact caveats and test boundaries are in `android-support-matrix.md`.
+On `main`, Android has VMess, VLESS, Trojan and Shadowsocks through Xray; Hev and Xray-native TUN choices; a validated/persisted local SOCKS port; Xray sniffing; engine log level and the tested 100–10,000 numeric in-memory log cap; limited foreground/offline Auto Ping; and persisted VPN DNS/MTU consumed by Android/Xray/Hev on the next connection. Post-merge CI run 44889231145 passed. Exact caveats and test boundaries are in `android-support-matrix.md`.
 
 SSH, HCR, SlowDNS, OpenVPN, Psiphon, BadVPN/UDPGW, Share Net, advanced per-app/recovery/routing controls, response checking, and the remaining screenshot features are **not yet fully implemented**. Do not expose unsupported options as working controls.
 
