@@ -6,25 +6,13 @@
 
 The GitHub repository is public, and an Android signing keystore was tracked in its history while its password was embedded in Gradle/workflow configuration. Treat that signing identity as compromised. Removing the file from the current tree does **not** erase it from existing Git commits, clones, caches, or prior releases. Do not use it for another public release. History cleanup is a separate coordinated operation and has not been performed.
 
-The user approved key rotation. This repository change removes the old keystore from the current tree and changes release signing to require a new private keystore injected from protected GitHub Actions secrets. No new private key was generated or saved in this workspace.
+The user approved key rotation. This repository change removes the old keystore from the current tree and changes release signing to require a private keystore injected from protected GitHub Actions secrets. A fresh RSA-3072 PKCS#12 key was generated in a temporary directory, uploaded directly to the repository's Actions secrets, and the temporary key file was deleted; no private key or password is in the worktree or commit. The four signing secrets and `ANDROID_KEY_CERT_SHA256` repository variable are now configured. GitHub Actions secrets are write-only, and this agent did not create a separate offline key backup; maintainers must decide how to protect recovery before release.
 
 Before any release:
 
-1. On a trusted machine, generate a new PKCS#12 keystore **outside the repository**. Keep a protected offline backup. For example:
-
-   ```sh
-   umask 077
-   mkdir -p "$HOME/.config/nusatunnel"
-   keytool -genkeypair -alias nusatunnel -keyalg RSA -keysize 3072 \
-     -validity 10000 -storetype PKCS12 \
-     -keystore "$HOME/.config/nusatunnel/nusatunnel-release.p12" \
-     -dname "CN=Xbibz Official, OU=NusaTunnel, O=Xbibz Official, C=ID"
-   ```
-
-   Let `keytool` prompt for the password; do not put it in shell history. Use the same password for the store and key with PKCS#12.
-
-2. In the repository's **Settings → Secrets and variables → Actions**, create secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. `ANDROID_KEYSTORE_BASE64` is the single-line Base64 of the new `.p12`; do not paste any private material into an issue, commit, or chat. For PKCS#12, set the store and key passwords to the password chosen above.
-3. Create repository variable `ANDROID_KEY_CERT_SHA256` from the new certificate's SHA-256 fingerprint (`keytool -list -v ...`). This public fingerprint is checked against every release APK.
+1. Do not generate or replace the configured key casually. Ensure the signing identity has a protected recovery plan; any additional backup must remain outside the repository and must not be pasted into issues, commits, or chat. Never reuse the exposed key.
+2. In repository **Settings → Secrets and variables → Actions**, verify only the names (not values) of `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`; verify `ANDROID_KEY_CERT_SHA256` exists as a repository variable. Secret values cannot be read back through GitHub's API.
+3. Verify the configured fingerprint against the new certificate during a signed release build; it is checked against every release APK.
 4. Decide and test migration for current v2.2.5 installs. A fresh key is not accepted as an in-place update of APKs signed by the old key without a supported signing lineage. A clean reinstall can erase app data; no tested export/restore path is evidenced yet. Do not publish until data migration/backup and the user notice are implemented, tested, and approved.
 5. Increment `versionCode`/`versionName` and add matching `docs/release-notes-v<VERSION>.md`; do not retag or overwrite an existing release.
 
@@ -43,7 +31,7 @@ Normal Android CI builds may use the debug signing key only to prove that the re
 
 ## Remaining release blockers
 
-- The new private keystore and certificate fingerprint have not been provisioned in GitHub Settings; the release workflow must fail closed until they are.
+- The rotated keystore secrets and certificate-fingerprint variable are provisioned, but the release workflow has not yet verified a signed release APK; no separate offline key backup is documented.
 - The old private key remains present in public Git history. The current tree is being cleaned; history purge/revocation and distribution-channel notice need owner coordination.
 - Existing-install migration/data backup has not been implemented or tested for a signing-key change.
 - The feature ledger is still partial: SSH/HCR, SlowDNS, complete Xray profile/routing editors, OpenVPN, Psiphon, Share Net, response checker, and additional screenshot controls remain incomplete. A green build does not clear those parity blockers.
