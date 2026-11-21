@@ -501,3 +501,10 @@ aurora glow (cyan/violet), ring orbit gradient, node jaringan, monogram
 NT gradasi teal→sky→indigo. Plus monochrome (themed icon Android 13+)
 dan glyph notifikasi NT 24dp. Dipreview via VLM multi-iterasi hingga
 verdict SHIP.
+
+### Bug produksi tertangkap unit test lokal (sebelum push v2.2.2)
+1. `trojan://` di-parse dengan `substring(10)` padahal prefix panjangnya 9 —
+   karakter pertama password terpotong (semua koneksi trojan gagal auth).
+2. `parseQuery` menukar key↔value — parameter `security/type/sni/flow`
+   link vless/trojan tidak pernah terbaca.
+Keduanya lolos ke v2.2.1 karena tanpa test; sekarang ada regression test.

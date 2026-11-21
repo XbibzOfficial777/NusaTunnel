@@ -18,7 +18,7 @@ object LinkParser {
             when {
                 link.startsWith("vmess://", true) -> parseVmess(link.substring(8))
                 link.startsWith("vless://", true) -> parseVless(link.substring(8))
-                link.startsWith("trojan://", true) -> parseTrojan(link.substring(10))
+                link.startsWith("trojan://", true) -> parseTrojan(link.substring(9))
                 link.startsWith("ss://", true) -> parseShadowsocks(link.substring(5))
                 else -> null
             }
@@ -263,9 +263,8 @@ object LinkParser {
 
     private fun parseQuery(q: String): Map<String, String> =
         q.split("&").filter { it.contains('=') }.associate {
-            val k = it.substringBefore('=')
-            urlDecode(it.substringAfter('=')) to urlDecode(k).let { _ -> urlDecode(it.substringAfter('=')) }
-        }.mapKeys { urlDecode(it.key) }
+            urlDecode(it.substringBefore('=')) to urlDecode(it.substringAfter('='))
+        }
 
     private fun urlDecode(s: String): String =
         java.net.URLDecoder.decode(s, "UTF-8")

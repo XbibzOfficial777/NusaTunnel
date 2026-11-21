@@ -3,6 +3,7 @@ package com.nusa.tunnel.core
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -45,17 +46,17 @@ class XrayConfigBuilderTest {
     @Test
     fun `routing rule - outboundTag HARUS string bukan array (bug v220)`() {
         val rule = build(trojan)["routing"]!!.jsonObject["rules"]!!.jsonArray.single().jsonObject
-        val tag = rule["outboundTag"] as? kotlinx.serialization.json.JsonPrimitive
-            ?: error("outboundTag harus string, dapat: ${rule["outboundTag\"]}")
-        assertEquals("proxy", tag.content)
+        val tag = rule["outboundTag"]
+        assertTrue("outboundTag harus string bukan array, dapat: $tag", tag is JsonPrimitive)
+        assertEquals("proxy", (tag as JsonPrimitive).content)
     }
 
     @Test
     fun `routing rule - port HARUS string range bukan array (bug v220)`() {
         val rule = build(trojan)["routing"]!!.jsonObject["rules"]!!.jsonArray.single().jsonObject
-        val port = rule["port"] as? kotlinx.serialization.json.JsonPrimitive
-            ?: error("port harus JsonPrimitive string, dapat: ${rule["port"]}")
-        assertEquals("0-65535", port.content)
+        val port = rule["port"]
+        assertTrue("port harus string range, dapat: $port", port is JsonPrimitive)
+        assertEquals("0-65535", (port as JsonPrimitive).content)
     }
 
     @Test
