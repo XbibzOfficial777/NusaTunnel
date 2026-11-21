@@ -30,6 +30,90 @@ object LinkParser {
     fun parseMany(text: String): List<ServerProfile> =
         text.lines().mapNotNull { l -> parse(l)?.takeIf { it.host.isNotBlank() } }
 
+    /**
+     * Parse config Xray-core JSON mentah (ala HTTP Custom: paste config penuh).
+     * Mengambil semua outbound vmess/vless/trojan/shadowsocks beserta streamSettings-nya.
+     */
+    fun parseXrayConfig(jsonText: String): List<ServerProfile> = try {
+        val root = org.json.JSONObject(jsonText)
+        val arr = root.optJSONArray("outbounds") ?: return emptyList()
+        val out = mutableListOf<ServerProfile>()
+        for (i in 0 until arr.length()) {
+            val ob = arr.optJSONObject(i) ?: continue
+            val proto = when (ob.optString("protocol").lowercase()) {
+                "vmess" -> Proto.VMess
+                "vless" -> Proto.VLESS
+                "trojan" -> Proto.Trojan
+                "shadowsocks" -> Proto.Shadowsocks
+                else -> null
+            } ?: continue
+            val p = outboundToProfile(ob, proto) ?: continue
+            out.add(p)
+        }
+        out
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    private fun outboundToProfile(ob: org.json.JSONObject, proto: Proto): ServerProfile? {
+        val s = ob.optJSONObject("settings") ?: return null
+        var host = ""; var port = 0; var secret = ""; var enc = ""
+        when (proto) {
+            Proto.VMess, Proto.VLESS -> {
+                val vnext = s.optJSONArray("vnext")?.optJSONObject(0) ?: return null
+                val user = vnext.optJSONArray("users")?.optJSONObject(0)
+                host = vnext.optString("address")
+                port = vnext.optInt("port")
+                secret = user?.optString("id") ?: ""
+                enc = user?.optString("security") ?: user?.optString("encryption") ?: ""
+            }
+            Proto.Trojan -> {
+                val srv = s.optJSONArray("servers")?.optJSONObject(0) ?: return null
+                // Xray >= v26: password di level server; versi lama: di users[0]
+                secret = if (srv.has("password")) srv.optString("password")
+                else srv.optJSONArray("users")?.optJSONObject(0)?.optString("password") ?: ""
+                host = srv.optString("address")
+                port = srv.optInt("port")
+            }
+            Proto.Shadowsocks -> {
+                val srv = s.optJSONArray("servers")?.optJSONObject(0) ?: return null
+                host = srv.optString("address")
+                port = srv.optInt("port")
+                secret = srv.optString("password")
+                enc = srv.optString("method")
+            }
+        }
+        if (host.isBlank() || port !in 1..65535 || secret.isBlank()) return null
+
+        val ss = ob.optJSONObject("streamSettings")
+        val network = ss?.optString("network") ?: "tcp"
+        val security = ss?.optString("security") ?: "none"
+        val tls = security.equals("tls", true) || security.equals("reality", true)
+        val tlsSet = ss?.optJSONObject("tlsSettings")
+        val wsSet = ss?.optJSONObject("wsSettings")
+        val grpcSet = ss?.optJSONObject("grpcSettings")
+        val netSet = ss?.optJSONObject("networkSettings")
+
+        return ServerProfile(
+            id = java.util.UUID.randomUUID().toString(),
+            proto = proto,
+            remarks = ob.optString("tag").ifBlank { "$host:$port" },
+            host = host, port = port, secret = secret,
+            encryption = enc.ifBlank { if (proto == Proto.VMess) "auto" else if (proto == Proto.Shadowsocks) "aes-256-gcm" else "" },
+            network = network,
+            tls = tls,
+            sni = tlsSet?.optString("serverName") ?: "",
+            alpn = tlsSet?.optJSONArray("alpn")?.join("/") ?: "",
+            fingerprint = tlsSet?.optString("fingerprint") ?: "",
+            flow = s.optJSONArray("vnext")?.optJSONObject(0)
+                ?.optJSONArray("users")?.optJSONObject(0)?.optString("flow") ?: "",
+            wsPath = wsSet?.optString("path") ?: netSet?.optString("path") ?: "/",
+            wsHost = wsSet?.optString("host") ?: netSet?.optString("host") ?: "",
+            grpcServiceName = grpcSet?.optString("serviceName") ?: "",
+            allowInsecure = tlsSet?.optBoolean("allowInsecure") ?: false,
+        )
+    }
+
     // ---------------------------------------------------------- vmess
 
     private fun parseVmess(body: String): ServerProfile? {
@@ -185,6 +269,16 @@ object LinkParser {
 
     private fun urlDecode(s: String): String =
         java.net.URLDecoder.decode(s, "UTF-8")
+
+    /** Helper: gabung array JSON string jadi satu string dengan pemisah. */
+    private fun org.json.JSONArray.join(sep: String): String {
+        val sb = StringBuilder()
+        for (i in 0 until length()) {
+            if (i > 0) sb.append(sep)
+            sb.append(optString(i))
+        }
+        return sb.toString()
+    }
 
     private fun b64Decode(s: String): String? = b64DecodeFlex(s)
 

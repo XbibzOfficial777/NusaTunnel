@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddLink
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.VpnKey
@@ -37,6 +38,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,10 +76,16 @@ fun ServersScreen(
     servers: List<ServerProfile>,
     selectedId: String?,
     pingBusy: Set<String>,
-    onAdd: (links: String) -> Int,
+    onAdd: suspend (links: String) -> Pair<Int, String?>,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
     onPing: (ServerProfile) -> Unit,
+    subUrl: String,
+    onSubUrl: (String) -> Unit,
+    subAuto: Boolean,
+    onSubAuto: (Boolean) -> Unit,
+    subBusy: Boolean,
+    onRefreshSub: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     // reset paginasi hanya saat pencarian berubah atau jumlah server berubah
@@ -141,6 +150,18 @@ fun ServersScreen(
             }
             Spacer(Modifier.height(12.dp))
 
+            // ---- panel subscription URL ----
+            SubscriptionCard(
+                subUrl = subUrl,
+                onSubUrl = onSubUrl,
+                subAuto = subAuto,
+                onSubAuto = onSubAuto,
+                subBusy = subBusy,
+                onRefreshSub = onRefreshSub,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -192,16 +213,23 @@ fun ServersScreen(
 
         // tombol import melayang
         var showAdd by remember { mutableStateOf(false) }
+        var importBusy by remember { mutableStateOf(false) }
         AddFab(onClick = { showAdd = true })
 
         if (showAdd) {
             AddDialog(
-                onDismiss = { showAdd = false },
+                busy = importBusy,
+                onDismiss = { if (!importBusy) showAdd = false },
                 onAdd = { links ->
-                    val n = onAdd(links)
-                    showAdd = false
-                    scope.launch { TunnelManager.log("Import: $n server baru") }
-                    n
+                    scope.launch {
+                        importBusy = true
+                        val (n, err) = onAdd(links)
+                        importBusy = false
+                        if (err == null) {
+                            showAdd = false
+                            TunnelManager.log("Import: $n server baru")
+                        }
+                    }
                 },
             )
         }
@@ -300,6 +328,120 @@ private fun ServerRow(
     }
 }
 
+/** Panel subscription URL — pasang, refresh manual, auto-update. */
+@Composable
+private fun SubscriptionCard(
+    subUrl: String,
+    onSubUrl: (String) -> Unit,
+    subAuto: Boolean,
+    onSubAuto: (Boolean) -> Unit,
+    subBusy: Boolean,
+    onRefreshSub: () -> Unit,
+) {
+    var url by remember(subUrl) { mutableStateOf(subUrl) }
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        corner = 14.dp,
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.CloudSync, null, tint = Mint, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Subscription",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Frost,
+                )
+                Spacer(Modifier.weight(1f))
+                if (subBusy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 1.5.dp,
+                        color = Spruce,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text("https://contoh.com/sub?token=…", style = MaterialTheme.typography.bodyMedium)
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Spruce,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedTextColor = Frost,
+                    unfocusedTextColor = Frost,
+                    cursorColor = Spruce,
+                ),
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Auto-update",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = FrostDim,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = subAuto,
+                    onCheckedChange = onSubAuto,
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = Spruce,
+                        checkedThumbColor = Color(0xFF07131F),
+                        uncheckedTrackColor = Color(0x22FFFFFF),
+                        uncheckedThumbColor = FrostDim,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { onSubUrl(url) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0x1FFFFFFF),
+                        contentColor = Frost,
+                    ),
+                ) {
+                    Text("SIMPAN URL", style = MaterialTheme.typography.labelLarge)
+                }
+                Spacer(Modifier.width(10.dp))
+                Button(
+                    onClick = {
+                        onSubUrl(url)
+                        onRefreshSub()
+                    },
+                    enabled = url.isNotBlank() && !subBusy,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Spruce,
+                        contentColor = Color(0xFF07131F),
+                    ),
+                ) {
+                    Text("MUAT SERVER", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AddFab(onClick: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
@@ -322,7 +464,7 @@ private fun AddFab(onClick: () -> Unit) {
 }
 
 @Composable
-private fun AddDialog(onDismiss: () -> Unit, onAdd: (String) -> Int) {
+private fun AddDialog(busy: Boolean, onDismiss: () -> Unit, onAdd: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         GlassCard(
@@ -339,8 +481,12 @@ private fun AddDialog(onDismiss: () -> Unit, onAdd: (String) -> Int) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Tempel link vmess:// vless:// trojan:// ss:// (boleh banyak baris)",
-                    style = MaterialTheme.typography.bodyMedium,
+                    "Tempel APA PUN — dideteksi otomatis:\n" +
+                        "• link vmess:// vless:// trojan:// ss://\n" +
+                        "• URL subscription http(s)\n" +
+                        "• blob base64\n" +
+                        "• config JSON Xray",
+                    style = MaterialTheme.typography.bodySmall,
                     color = FrostDim,
                 )
                 Spacer(Modifier.height(14.dp))
@@ -350,7 +496,7 @@ private fun AddDialog(onDismiss: () -> Unit, onAdd: (String) -> Int) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp),
-                    placeholder = { Text("vmess://eyJ2IjoiMiIs…") },
+                    placeholder = { Text("vmess://eyJ2IjoiMiIs… / https://… / { \"outbounds\": … }") },
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -366,19 +512,29 @@ private fun AddDialog(onDismiss: () -> Unit, onAdd: (String) -> Int) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    TextButton(onClick = onDismiss) { Text("BATAL", color = FrostDim) }
+                    TextButton(onClick = onDismiss, enabled = !busy) { Text("BATAL", color = FrostDim) }
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = { onAdd(text) },
-                        enabled = text.isNotBlank(),
+                        enabled = text.isNotBlank() && !busy,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Spruce, contentColor = Color(0xFF07131F),
                         ),
                     ) {
-                        Icon(Icons.Rounded.CheckCircle, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("IMPORT")
+                        if (busy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 1.5.dp,
+                                color = Color(0xFF07131F),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("MEMPROSES…")
+                        } else {
+                            Icon(Icons.Rounded.CheckCircle, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("IMPORT")
+                        }
                     }
                 }
             }

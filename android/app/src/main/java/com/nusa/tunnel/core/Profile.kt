@@ -31,6 +31,8 @@ data class ServerProfile(
     val grpcServiceName: String = "",
     val serviceName: String = "",
     val allowInsecure: Boolean = false,
+    /* penanda asal: "" = import manual, atau URL subscription sumber server ini */
+    val subTag: String = "",
     /* hasil ping nyata (ms), -1 = belum / gagal */
     var latencyMs: Int = -1,
 )

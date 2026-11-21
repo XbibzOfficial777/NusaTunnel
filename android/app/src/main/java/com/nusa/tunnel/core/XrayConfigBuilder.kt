@@ -92,9 +92,12 @@ object XrayConfigBuilder {
                 putJsonArray("rules") {
                     add(buildJsonObject {
                         put("type", "field")
-                        putJsonArray("outboundTag") { add("proxy") }
-                        putJsonArray("port") { add("0-65535") }
-                        put("balancerTag", "")
+                        // CATATAN: outboundTag HARUS string (bukan array) —
+                        // RouterRule.outboundTag di Xray-core bertipe string.
+                        // "port" juga HARUS string ("0-65535"), bukan array —
+                        // Xray-core >= v25 menolak array di field port.
+                        put("outboundTag", "proxy")
+                        put("port", "0-65535")
                     })
                     // DNS di dalam tunnel dilempar ke freedom (langsung via proxy routing)
                 }
@@ -164,12 +167,10 @@ object XrayConfigBuilder {
             add(buildJsonObject {
                 put("address", p.host)
                 put("port", p.port)
-                putJsonArray("users") {
-                    add(buildJsonObject {
-                        put("password", p.secret)
-                        put("level", 8)
-                    })
-                }
+                // Xray-core >= v26: password trojan ada di level server,
+                // BUKAN di users[]. Format lama ditolak: "Trojan password is not specified."
+                put("password", p.secret)
+                put("level", 8)
             })
         }
     })

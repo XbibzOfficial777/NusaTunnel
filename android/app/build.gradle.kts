@@ -14,18 +14,19 @@ android {
         applicationId = "com.nusa.tunnel"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "2.2.0"
+        versionCode = 2
+        versionName = "2.2.1"
         vectorDrawables { useSupportLibrary = true }
     }
 
-    // ==== APK per-arsitektur (v2.2.0) ====
+    // ==== APK per-arsitektur + universal (v2.2.1) ====
+    // Output: arm64-v8a, armeabi-v7a, x86, x86_64 + 1 APK universal
     splits {
         abi {
             isEnable = true
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
 

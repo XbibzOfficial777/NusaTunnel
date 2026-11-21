@@ -404,3 +404,74 @@ macOS Intel 20MB, Android universal APK 180MB.
 - Disk sandbox penuh saat build (100%) → dibersihkan: zip ter-extract, tree build v2.1 lama
   (deb210/macpkg21/winpkg21), APK universal lokal (masih ada di release)
 - APK universal (171 MB) tetap tersedia di release untuk yang mau satu file semua-device
+
+## 2026-11-21 — v2.2.1 Fix config Xray + Subscription + CI GitHub Actions
+
+**Sesi**: lanjutan chat "cek nusa tunnel chat conversation dan fix error" (screenshot log Android).
+
+### Bug config Xray — 3 akar masalah, semuanya tuntas & terverifikasi
+
+Error di lapangan: `config error: ... invalid router rule > json: cannot
+unmarshal array into Go struct field RouterRule.outboundTag of type string`.
+
+Direproduksi & diverifikasi dengan **binary Xray-core v26.11.9 asli** (`xray run -test`,
+versi identik dengan AndroidLibXrayLite yang dipakai app):
+
+| # | Bug | Perbaikan di `XrayConfigBuilder.kt` |
+|---|---|---|
+| 1 | `outboundTag` dibangun sebagai array `["proxy"]` — Xray menuntut string | `put("outboundTag", "proxy")` — error asli screenshot |
+| 2 | `port` sebagai array `["0-65535"]` — Xray >= v25 menolak array port | `put("port", "0-65535")` (bug tersembunyi ke-2, baru muncul setelah fix #1) |
+| 3 | trojan password di `users[]` — Xray >= v26 menuntut di level `servers[]` | password + level dipindah ke objek server (bug ke-3, muncul setelah fix #2) |
+
+Hasil akhir: 4 protokol (vmess/vless/trojan/ss) **semua LOLOS** `xray run -test`.
+Juga dihapus `balancerTag: ""` yang sia-sia pada rule.
+
+### Fitur baru Android — subscription + import pintar ala HTTP Custom
+
+- **`SubscriptionManager.kt`** (baru): fetch URL sub via HttpURLConnection
+  (redirect manual http<->https, UA sendiri, timeout 15s, limit 8MB), isi bisa
+  daftar link / blob base64 / config JSON; server ditandai `subTag` = URL sumber.
+- **`SmartImporter.kt`** (baru): tempel APA PUN → auto-detect: link tunggal/many-baris,
+  URL http(s) (difetch sebagai subscription), blob base64, config JSON Xray mentah.
+- **`LinkParser.parseXrayConfig`**: ekstrak outbound vmess/vless/trojan/ss dari
+  config JSON penuh (termasuk streamSettings ws/grpc/tls) — trojan password
+  dibaca dari level server maupun users (kompatibel dua era).
+- **UI**: panel Subscription di ServersScreen (URL + SIMPAN + MUAT SERVER +
+  switch Auto-update), AddDialog jadi pintar dengan indikator MEMPROSES….
+- **Deep link & share** (AndroidManifest): `vmess://` `vless://` `trojan://` `ss://`
+  dari browser; `nusatunnel://sub?url=…` / `nusatunnel://add?url=|text=…`;
+  ACTION_SEND share teks; `usesCleartextTraffic` untuk sub http://.
+- **ServerStore**: key `sub_url` + `sub_auto`, `replaceSubscriptionServers()`
+  (hanya ganti server milik sub itu, server manual tak tersentuh, seleksi dipertahankan).
+- **NusaApp**: auto-update subscription di background saat app dibuka (jika aktif).
+
+### CI — GitHub Actions auto-release
+
+`.github/workflows/android-release.yml` (trigger: tag `v*` atau manual):
+JDK 21 + Gradle 9.9.2 (tanpa wrapper) + AAR engine di-cache dari
+2dust/AndroidLibXrayLite v26.11.9 → `assembleNusaRelease` + `bundleNusaRelease`
+→ rename loop generik → bundletool build-apks universal dari AAB →
+**6 aset + SHA256SUMS.txt** di GitHub Releases (softprops, release notes otomatis):
+
+- `NusaTunnel-v2.2.1-arm64-v8a.apk`
+- `NusaTunnel-v2.2.1-armeabi-v7a.apk`
+- `NusaTunnel-v2.2.1-x86.apk`
+- `NusaTunnel-v2.2.1-x86_64.apk`
+- `NusaTunnel-v2.2.1-universal.apk`  (splits: `isUniversalApk = true`)
+- `NusaTunnel-v2.2.1-universal.apks` (bundletool, mode universal)
+
+### Signing — PENTING
+
+Keystore rilis v2.2.0 (cert SHA-256 cd459527…) tidak pernah di-commit dan tidak
+ada di repo ini, sehingga **tidak dapat dipulihkan**. Untuk v2.2.1 dibuat keystore
+baru (cert F2:DC:3C:0A…) via `keystore-gen.sh` dan di-commit ke repo supaya
+signature CI stabil antar-build berikutnya. Konsekuensi: **APK v2.2.1 wajib
+install ulang** (uninstall v2.2.0 dulu — Android menolak update beda signature).
+Jika keystore asli masih ada di mesin lokal: base64-kan lalu set secret
+`ANDROID_KEYSTORE_BASE64` — workflow otomatis memakai secret itu bila ada
+(override keystore repo).
+
+### Git
+
+Identitas commit: `XbibzOfficial777 <xbibzke2@gmail.com>` (config lokal repo),
+credential helper persisten `--file=/home/z/my-project/.git-credentials`.

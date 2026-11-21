@@ -54,7 +54,7 @@ fun AppRoot(
     servers: List<com.nusa.tunnel.core.ServerProfile>,
     selectedId: String?,
     pingBusy: Set<String>,
-    onAddServers: (String) -> Int,
+    onAddServers: suspend (String) -> Pair<Int, String?>,
     onSelectServer: (String) -> Unit,
     onDeleteServer: (String) -> Unit,
     onPingServer: (com.nusa.tunnel.core.ServerProfile) -> Unit,
@@ -62,6 +62,12 @@ fun AppRoot(
     onSocksPort: (String) -> Unit,
     sniffer: Boolean,
     onSniffer: (Boolean) -> Unit,
+    subUrl: String,
+    onSubUrl: (String) -> Unit,
+    subAuto: Boolean,
+    onSubAuto: (Boolean) -> Unit,
+    subBusy: Boolean,
+    onRefreshSub: () -> Unit,
 ) {
     Scaffold(
         containerColor = Aurora1,
@@ -116,6 +122,12 @@ fun AppRoot(
                         onSelect = onSelectServer,
                         onDelete = onDeleteServer,
                         onPing = onPingServer,
+                        subUrl = subUrl,
+                        onSubUrl = onSubUrl,
+                        subAuto = subAuto,
+                        onSubAuto = onSubAuto,
+                        subBusy = subBusy,
+                        onRefreshSub = onRefreshSub,
                     )
                     Dest.Settings -> SettingsScreen(
                         socksPort = socksPort,
