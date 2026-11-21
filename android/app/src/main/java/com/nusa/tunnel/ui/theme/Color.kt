@@ -40,6 +40,10 @@ val AuroraGlow = Brush.radialGradient(
     colors = listOf(Color(0x6600C27A), Color(0x00000000)),
 )
 
+val AuroraMintGlow = Brush.radialGradient(
+    colors = listOf(Color(0x447CE8B4), Color(0x00000000)),
+)
+
 val GlassGradient = Brush.linearGradient(
     0f to Color(0x1FFFFFFF),
     0.5f to Color(0x0FFFFFFF),

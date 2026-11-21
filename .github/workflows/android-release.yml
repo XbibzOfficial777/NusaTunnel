@@ -1,23 +1,90 @@
 name: Android Release
 
-# Build APK per-ABI + universal + .apks lalu publish ke GitHub Releases.
-# Trigger: push tag v*  (contoh: git tag v2.2.1 && git push origin v2.2.1)
-#          atau dijalankan manual dari tab Actions (Run workflow).
+# Build APK per-ABI + universal + .apks, then create a DRAFT GitHub Release.
+# Trigger only by pushing a v* tag after the exact main commit has green Android CI.
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 permissions:
-  contents: write   # diperlukan untuk membuat Release & upload asset
+  actions: read
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  release-preflight:
+    name: Verify release tag and main CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require current main head, matching version tag, and green Android CI
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const source = await github.rest.repos.getContent({
+              owner, repo,
+              path: "android/app/build.gradle.kts",
+              ref: context.sha,
+            });
+            if (Array.isArray(source.data) || !source.data.content) {
+              core.setFailed("Could not read Android versionName from the tagged source.");
+              return;
+            }
+            const gradle = Buffer.from(source.data.content, "base64").toString("utf8");
+            const version = gradle.match(/versionName\s*=\s*"([^"]+)"/)?.[1];
+            if (!version || context.ref !== `refs/tags/v${version}`) {
+              core.setFailed(`Tag must match app version v${version ?? "unknown"}.`);
+              return;
+            }
+
+            const notesPath = `docs/release-notes-v${version}.md`;
+            await github.rest.repos.getContent({ owner, repo, path: notesPath, ref: context.sha });
+            try {
+              await github.rest.repos.getReleaseByTag({ owner, repo, tag: `v${version}` });
+              core.setFailed(`Release v${version} already exists; increment version before releasing.`);
+              return;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            try {
+              await github.rest.repos.getContent({
+                owner, repo, path: "android/nusatunnel.keystore", ref: context.sha,
+              });
+              core.setFailed("A release signing keystore is still tracked in the repository.");
+              return;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            const main = await github.rest.repos.getBranch({ owner, repo, branch: "main" });
+            if (main.data.commit.sha !== context.sha) {
+              core.setFailed("Release tag must point exactly at the current main HEAD.");
+              return;
+            }
+
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner, repo, head_sha: context.sha, per_page: 100,
+            });
+            const ciPassed = runs.data.workflow_runs.some(run =>
+              run.name === "Android CI" &&
+              run.event === "push" &&
+              run.head_branch === "main" &&
+              run.conclusion === "success"
+            );
+            if (!ciPassed) {
+              core.setFailed("The tagged main commit has no successful Android CI push run.");
+            }
+
   # ================== TES ==================
   # Semua rilis WAJIB lolos: unit test JVM + validasi config dengan
   # Xray-core ASLI (xray run -test) sebelum build APK dijalankan.
   test:
     name: Test (unit + config engine asli)
+    needs: release-preflight
     runs-on: ubuntu-latest
     env:
       LIBXRAY_VERSION: v26.11.9
@@ -92,11 +159,99 @@ jobs:
       - name: Validasi config builder dengan xray run -test
         run: python3 ci/verify_xray_config.py /tmp/xray-bin/xray
 
+  android-kvm-instrumentation:
+    name: Compose UI instrumentation on KVM
+    needs: release-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LIBXRAY_VERSION: v26.11.9
+      HEV_VERSION: 2.18.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle 9.9.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.9.2'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '15859902'
+          packages: platform-tools
+
+      - name: Install compile SDK and x86_64 emulator image
+        run: sdkmanager 'platform-tools' 'platforms;android-37.1' 'build-tools;37.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
+
+      - name: Require a usable KVM device
+        run: |
+          if [[ ! -e /dev/kvm ]]; then
+            echo '::error::/dev/kvm is missing; refusing to run Android without KVM acceleration.'
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_SDK_ROOT/emulator/emulator" -accel-check
+
+      - name: Cache Android engine AARs
+        id: engine-aars
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/app/libs/libxray.aar
+            android/app/libs/hev-socks5-tunnel.aar
+          key: engine-aars-${{ env.LIBXRAY_VERSION }}-${{ env.HEV_VERSION }}
+
+      - name: Download Android engine AARs
+        if: steps.engine-aars.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/libxray.aar \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
+          curl -fL --retry 3 -o android/app/libs/hev-socks5-tunnel.aar \
+            "https://github.com/heiher/hev-socks5-tunnel/releases/download/${HEV_VERSION}/hev-socks5-tunnel.aar"
+          test -s android/app/libs/libxray.aar
+          test -s android/app/libs/hev-socks5-tunnel.aar
+
+      - name: Verify HevSocks5Tunnel AAR checksum
+        run: echo "15ec8ed121663b562c99caa5bb602d1009f24e5b09e733438b81988f12feaaab  android/app/libs/hev-socks5-tunnel.aar" | sha256sum -c -
+
+      - name: Run Android instrumentation tests on KVM emulator
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -camera-back none -camera-front none -gpu swiftshader_indirect -accel on
+          script: cd android && gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest
+
+      - name: Upload instrumentation test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-kvm-instrumentation-${{ github.run_id }}
+          path: |
+            android/app/build/outputs/androidTest-results/connected/
+            android/app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 14
+
   # ================== BUILD & RELEASE ==================
   build-release:
-    name: Build & Release APK
-    needs: test   # rilis diblokir bila ada tes gagal
+    name: Build & Prepare Draft Release
+    needs: [release-preflight, test, android-kvm-instrumentation]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     env:
       # Versi engine Xray (AndroidLibXrayLite) — harus cocok dengan kode app
@@ -151,20 +306,90 @@ jobs:
       - name: Verify HevSocks5Tunnel AAR checksum
         run: echo "15ec8ed121663b562c99caa5bb602d1009f24e5b09e733438b81988f12feaaab  android/app/libs/hev-socks5-tunnel.aar" | sha256sum -c -
 
-      # Keystore rilis: pakai secret ANDROID_KEYSTORE_BASE64 bila ada (lebih aman),
-      # jika tidak ada pakai keystore yang di-commit di repo.
-      - name: Decode signing keystore (opsional dari secrets)
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
-        run: |
-          echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > android/nusatunnel.keystore
+      - name: Require rotated signing secrets and prepare private keystore
+        shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name is required; refusing to use the exposed repository keystore."
+              exit 1
+            fi
+          done
+          umask 077
+          KEYSTORE_PATH="$RUNNER_TEMP/nusatunnel-release.p12"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          keytool -list -storetype PKCS12 -keystore "$KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          printf '%s' "$ANDROID_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/nusatunnel-store-password"
+          printf '%s' "$ANDROID_KEY_PASSWORD" > "$RUNNER_TEMP/nusatunnel-key-password"
+          chmod 600 "$KEYSTORE_PATH" "$RUNNER_TEMP/nusatunnel-store-password" "$RUNNER_TEMP/nusatunnel-key-password"
+          echo "NUSATUNNEL_SIGNING_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
 
       - name: Build APK per-ABI + universal + AAB
         working-directory: android
+        env:
+          NUSATUNNEL_SIGNING_STORE_FILE: ${{ runner.temp }}/nusatunnel-release.p12
+          NUSATUNNEL_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NUSATUNNEL_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NUSATUNNEL_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          if [[ -z "$NUSATUNNEL_SIGNING_KEY_PASSWORD" ]]; then
+            echo '::error::ANDROID_KEY_PASSWORD is required.'
+            exit 1
+          fi
           gradle :app:assembleNusaRelease :app:bundleNusaRelease \
             --no-daemon --stacktrace --warning-mode=summary
+
+      - name: Verify APK signatures use the rotated certificate
+        shell: bash
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_KEY_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$EXPECTED_CERT_SHA256" ]]; then
+            echo '::error::Set the non-secret repository variable ANDROID_KEY_CERT_SHA256 before releasing.'
+            exit 1
+          fi
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "$SDK_ROOT" ]]; then
+            echo '::error::Android SDK root was not configured.'
+            exit 1
+          fi
+          APKSIGNER="$SDK_ROOT/build-tools/37.0.0/apksigner"
+          if [[ ! -x "$APKSIGNER" ]]; then
+            APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          fi
+          if [[ ! -x "$APKSIGNER" ]]; then
+            echo '::error::apksigner was not found in the Android SDK.'
+            exit 1
+          fi
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/nusaRelease/*.apk)
+          if (( ${#apks[@]} == 0 )); then
+            echo '::error::No release APKs were produced.'
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            output="$("$APKSIGNER" verify --print-certs "$apk")"
+            actual="$(printf '%s\n' "$output" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            if [[ -z "$actual" || "$actual" != "$expected" ]]; then
+              echo "::error::Signature certificate mismatch for $(basename "$apk")."
+              exit 1
+            fi
+            echo "Verified rotated signing certificate: $(basename "$apk")"
+          done
 
       # --------------------------------------------------------------- bundletool (.apks)
 
@@ -177,16 +402,20 @@ jobs:
 
       - name: Build universal .apks dari AAB
         working-directory: android
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          set -euo pipefail
           VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           java -jar /tmp/bundletool.jar build-apks \
             --mode=universal \
             --bundle=app/build/outputs/bundle/nusaRelease/app-nusaRelease.aab \
             --output="/tmp/NusaTunnel-v${VERSION}-universal.apks" \
-            --ks=nusatunnel.keystore \
-            --ks-key-alias=nusatunnel \
-            --ks-pass=pass:nusatunnel2026
+            --ks="$RUNNER_TEMP/nusatunnel-release.p12" \
+            --ks-key-alias="$ANDROID_KEY_ALIAS" \
+            --ks-pass="file:$RUNNER_TEMP/nusatunnel-store-password" \
+            --key-pass="file:$RUNNER_TEMP/nusatunnel-key-password"
 
       # --------------------------------------------------------------- rename + checksum
 
@@ -205,20 +434,21 @@ jobs:
 
       # --------------------------------------------------------------- release
 
-      - name: Tentukan tag release
+      - name: Confirm version tag
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
-          else
-            echo "TAG=v${VERSION}" >> "$GITHUB_ENV"
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" != "v${VERSION}" ]]; then
+            echo '::error::Release tag and app version differ.'
+            exit 1
           fi
+          echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload ke GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           name: NusaTunnel ${{ env.VERSION }}
-          draft: false
+          draft: true
           prerelease: false
           body_path: docs/release-notes-v${{ env.VERSION }}.md
           generate_release_notes: false

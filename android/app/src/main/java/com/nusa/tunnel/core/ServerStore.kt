@@ -8,10 +8,19 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private val Context.store by preferencesDataStore("nusatunnel")
+
+@Serializable
+data class ServerStoreSnapshot(
+    val servers: List<ServerProfile>,
+    val selectedId: String?,
+    val subscriptionUrl: String?,
+    val subscriptionAuto: Boolean,
+)
 
 /**
  * Penyimpanan server (DataStore Preferences + kotlinx-serialization).
@@ -36,6 +45,36 @@ class ServerStore(private val context: Context) {
 
     /** Auto-update subscription tiap aplikasi dibuka. */
     val subscriptionAuto: Flow<Boolean> = context.store.data.map { it[KEY_SUB_AUTO] ?: false }
+
+    suspend fun backupSnapshot(): ServerStoreSnapshot {
+        val preferences = context.store.data.first()
+        val encodedServers = preferences[KEY_SERVERS]
+        val savedServers = if (encodedServers == null) {
+            emptyList()
+        } else {
+            runCatching { json.decodeFromString<List<ServerProfile>>(encodedServers) }
+                .getOrElse { throw NusaTunnelBackupException("Data profil server rusak; backup dibatalkan.", it) }
+        }
+        return ServerStoreSnapshot(
+            servers = savedServers,
+            selectedId = preferences[KEY_SELECTED],
+            subscriptionUrl = preferences[KEY_SUB_URL],
+            subscriptionAuto = preferences[KEY_SUB_AUTO] ?: false,
+        )
+    }
+
+    /** Atomically replace profiles and subscription state; null values remove stale selections. */
+    suspend fun restoreSnapshot(snapshot: ServerStoreSnapshot) {
+        val encodedServers = json.encodeToString(snapshot.servers)
+        context.store.edit { preferences ->
+            preferences[KEY_SERVERS] = encodedServers
+            if (snapshot.selectedId == null) preferences.remove(KEY_SELECTED)
+            else preferences[KEY_SELECTED] = snapshot.selectedId
+            if (snapshot.subscriptionUrl.isNullOrBlank()) preferences.remove(KEY_SUB_URL)
+            else preferences[KEY_SUB_URL] = snapshot.subscriptionUrl.trim()
+            preferences[KEY_SUB_AUTO] = snapshot.subscriptionAuto
+        }
+    }
 
     suspend fun setSubscription(url: String?) {
         context.store.edit { prefs ->

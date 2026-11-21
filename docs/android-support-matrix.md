@@ -1,6 +1,6 @@
 # Android support matrix (audit)
 
-Audit date: 2026-11-21. This matrix describes the Android app only. The full screenshot-by-screenshot HTTP Custom parity scope is tracked in [`http-custom-reference-matrix.md`](http-custom-reference-matrix.md); planned controls are not supported features.
+Audit date: 2026-11-21. This matrix describes the Android app only. The full screenshot-by-screenshot HTTP Custom parity scope is tracked in [`http-custom-reference-matrix.md`](http-custom-reference-matrix.md); planned controls are not supported features. Android signing and release gates are tracked in [`android-release-readiness.md`](android-release-readiness.md); the current release status is blocked.
 
 ## Implemented on `main` (PRs #1–#5; baseline `d3ad310`)
 

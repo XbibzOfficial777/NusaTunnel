@@ -5,6 +5,20 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Production signing is injected by the protected Android Release workflow only.
+// Local builds and regular CI remain buildable with the debug key; release CI fails
+// closed before building unless all secret-backed signing values are supplied.
+val nusaSigningStoreFile = System.getenv("NUSATUNNEL_SIGNING_STORE_FILE")
+val nusaSigningStorePassword = System.getenv("NUSATUNNEL_SIGNING_STORE_PASSWORD")
+val nusaSigningKeyAlias = System.getenv("NUSATUNNEL_SIGNING_KEY_ALIAS")
+val nusaSigningKeyPassword = System.getenv("NUSATUNNEL_SIGNING_KEY_PASSWORD")
+val hasNusaReleaseSigning = listOf(
+    nusaSigningStoreFile,
+    nusaSigningStorePassword,
+    nusaSigningKeyAlias,
+    nusaSigningKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.nusa.tunnel"
     compileSdk = 37
@@ -14,8 +28,8 @@ android {
         applicationId = "com.nusa.tunnel"
         minSdk = 26
         targetSdk = 37
-        versionCode = 6
-        versionName = "2.2.5"
+        versionCode = 7
+        versionName = "2.2.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -46,11 +60,17 @@ android {
             matchingFallbacks += "release"
             isMinifyEnabled = false      // build pertama tanpa R8 utk keandalan engine gobind
             isShrinkResources = false
-            signingConfig = signingConfigs.create("nusa") {
-                storeFile = rootProject.file("nusatunnel.keystore")
-                storePassword = "nusatunnel2026"
-                keyAlias = "nusatunnel"
-                keyPassword = "nusatunnel2026"
+            signingConfig = if (hasNusaReleaseSigning) {
+                signingConfigs.findByName("nusa") ?: signingConfigs.create("nusa") {
+                    storeFile = file(nusaSigningStoreFile!!)
+                    storePassword = nusaSigningStorePassword
+                    keyAlias = nusaSigningKeyAlias
+                    keyPassword = nusaSigningKeyPassword
+                }
+            } else {
+                // Deliberately not a release identity. Android CI can verify assembly
+                // without possessing the protected production keystore.
+                signingConfigs.getByName("debug")
             }
         }
     }
@@ -88,6 +108,7 @@ dependencies {
     implementation(files("libs/hev-socks5-tunnel.aar"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)

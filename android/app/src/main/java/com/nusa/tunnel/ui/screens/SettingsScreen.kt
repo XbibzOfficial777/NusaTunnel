@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Engineering
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lan
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -46,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,11 +56,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.BuildConfig
 import com.nusa.tunnel.core.ConnectionCheckSettings
 import com.nusa.tunnel.core.ConnectionCheckSettingsValidator
 import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.NusaTunnelBackup
 import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelSettings
@@ -68,7 +72,6 @@ import com.nusa.tunnel.core.VpnAppRoutingMode
 import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.components.GlassCard
-import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Danger
 import com.nusa.tunnel.ui.theme.Frost
 import com.nusa.tunnel.ui.theme.FrostDim
@@ -102,15 +105,13 @@ fun SettingsScreen(
     vpnAppRouting: VpnAppRoutingSettings,
     availableVpnApps: List<VpnAppInfo>,
     onVpnAppRouting: (VpnAppRoutingSettings) -> Unit,
+    onExportBackup: (CharArray) -> Unit,
+    onRestoreBackup: (CharArray) -> Unit,
 ) {
     var subPage by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = subPage.isNotEmpty()) { subPage = "" }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(AuroraGradient)
-    ) {
+    Box(Modifier.fillMaxSize()) {
         if (subPage == "per_app") {
             PerAppVpnPage(
                 settings = vpnAppRouting,
@@ -248,6 +249,12 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(16.dp))
 
+                BackupRestoreSection(
+                    onExport = onExportBackup,
+                    onRestore = onRestoreBackup,
+                )
+                Spacer(Modifier.height(16.dp))
+
                 SettingsSection("About", Icons.Rounded.Engineering) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                         InfoRow("App version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -265,6 +272,147 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+private enum class BackupDialogMode { Export, Restore }
+
+@Composable
+private fun BackupRestoreSection(
+    onExport: (CharArray) -> Unit,
+    onRestore: (CharArray) -> Unit,
+) {
+    var dialog by remember { mutableStateOf<BackupDialogMode?>(null) }
+    var passphrase by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    var replaceConfirmed by remember { mutableStateOf(false) }
+
+    fun dismissDialog() {
+        passphrase = ""
+        confirmation = ""
+        replaceConfirmed = false
+        dialog = null
+    }
+
+    SettingsSection("Backup & Restore", Icons.Rounded.Lock) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Text(
+                "Backup berisi kredensial server dan URL subscription. File dienkripsi dengan passphrase yang Anda pilih; simpan file dan passphrase secara terpisah.",
+                style = MaterialTheme.typography.bodySmall,
+                color = FrostDim,
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = {
+                    passphrase = ""
+                    confirmation = ""
+                    dialog = BackupDialogMode.Export
+                },
+                modifier = Modifier.fillMaxWidth().testTag("backup_export"),
+            ) {
+                Text("Ekspor backup terenkripsi")
+            }
+            Spacer(Modifier.height(4.dp))
+            OutlinedButton(
+                onClick = {
+                    passphrase = ""
+                    confirmation = ""
+                    replaceConfirmed = false
+                    dialog = BackupDialogMode.Restore
+                },
+                modifier = Modifier.fillMaxWidth().testTag("backup_restore"),
+            ) {
+                Text("Pulihkan backup")
+            }
+        }
+    }
+
+    val mode = dialog
+    if (mode != null) {
+        val export = mode == BackupDialogMode.Export
+        val validLength = passphrase.length in
+            NusaTunnelBackup.MIN_PASSPHRASE_LENGTH..NusaTunnelBackup.MAX_PASSPHRASE_LENGTH
+        val canContinue = if (export) {
+            validLength && confirmation == passphrase
+        } else {
+            validLength && replaceConfirmed
+        }
+        AlertDialog(
+            onDismissRequest = ::dismissDialog,
+            title = {
+                Text(
+                    if (export) "Buat backup terenkripsi" else "Pulihkan backup",
+                    color = Frost,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (export) {
+                            "Buat passphrase minimal 12 karakter. Passphrase tidak dapat dipulihkan oleh NusaTunnel jika terlupa."
+                        } else {
+                            "Pemulihan akan mengganti profil server dan pengaturan yang ada. Pilih berkas .ntbackup, lalu masukkan passphrase yang digunakan saat ekspor."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = FrostDim,
+                    )
+                    OutlinedTextField(
+                        value = passphrase,
+                        onValueChange = { if (it.length <= NusaTunnelBackup.MAX_PASSPHRASE_LENGTH) passphrase = it },
+                        modifier = Modifier.fillMaxWidth().testTag("backup_passphrase"),
+                        label = { Text("Passphrase") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    )
+                    if (export) {
+                        OutlinedTextField(
+                            value = confirmation,
+                            onValueChange = { if (it.length <= NusaTunnelBackup.MAX_PASSPHRASE_LENGTH) confirmation = it },
+                            modifier = Modifier.fillMaxWidth().testTag("backup_passphrase_confirm"),
+                            label = { Text("Ulangi passphrase") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = replaceConfirmed,
+                                onCheckedChange = { replaceConfirmed = it },
+                            )
+                            Text(
+                                "Saya paham data saat ini akan diganti",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = FrostDim,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = canContinue,
+                    onClick = {
+                        val secret = passphrase.toCharArray()
+                        dismissDialog()
+                        if (export) onExport(secret) else onRestore(secret)
+                    },
+                ) {
+                    Text(if (export) "Pilih lokasi" else "Pilih backup")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = ::dismissDialog) { Text("Batal") }
+            },
+            containerColor = Color(0xFF262932),
+            titleContentColor = Frost,
+            textContentColor = FrostDim,
+        )
     }
 }
 

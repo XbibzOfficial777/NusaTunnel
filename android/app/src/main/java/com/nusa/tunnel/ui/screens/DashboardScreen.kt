@@ -1,11 +1,12 @@
 package com.nusa.tunnel.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +36,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -46,8 +46,6 @@ import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.core.TunnelState
 import com.nusa.tunnel.ui.components.GlassCard
 import com.nusa.tunnel.ui.components.PulseConnectButton
-import com.nusa.tunnel.ui.theme.AuroraGlow
-import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Danger
 import com.nusa.tunnel.ui.theme.Frost
 import com.nusa.tunnel.ui.theme.FrostDim
@@ -63,20 +61,7 @@ fun DashboardScreen(
 ) {
     val status by TunnelManager.status.collectAsState()
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(AuroraGradient)
-    ) {
-        // glow aurora di belakang tombol
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .size(420.dp)
-                .alpha(0.45f)
-                .background(AuroraGlow, CircleShape)
-        )
-
+    Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,8 +85,11 @@ fun DashboardScreen(
             AnimatedContent(
                 targetState = status.serverName.ifBlank { serverName },
                 transitionSpec = {
-                    (slideInVertically(tween(280)) { it / 3 } + fadeIn(tween(280)))
-                        .togetherWith(fadeOut(tween(180)))
+                    val enter = slideInVertically(tween(260)) { height -> height / 3 } +
+                        fadeIn(tween(240))
+                    val exit = slideOutVertically(tween(180)) { height -> -height / 5 } +
+                        fadeOut(tween(140))
+                    enter.togetherWith(exit)
                 },
                 label = "serverName",
             ) { name ->
@@ -160,14 +148,19 @@ fun DashboardScreen(
 
 @Composable
 private fun StatusPill(state: TunnelState) {
-    val (bg, fg, label) = when (state) {
+    val (targetBg, targetFg, label) = when (state) {
         TunnelState.Idle -> Triple(Color(0x1FFFFFFF), FrostDim, "TIDAK AKTIF")
         TunnelState.Connecting -> Triple(Color(0x33FFC55C), Color(0xFFFFC55C), "MENGHUBUNGKAN…")
         TunnelState.Connected -> Triple(Color(0x3300C27A), Mint, "TERHUBUNG")
         TunnelState.Disconnecting -> Triple(Color(0x33FFC55C), Color(0xFFFFC55C), "MEMUTUSKAN…")
         TunnelState.Error -> Triple(Color(0x33FF6B7A), Danger, "GAGAL")
     }
-    GlassCard(corner = 999.dp) {
+    val bg by animateColorAsState(targetBg, animationSpec = tween(260), label = "status-background")
+    val fg by animateColorAsState(targetFg, animationSpec = tween(260), label = "status-foreground")
+    GlassCard(
+        modifier = Modifier.background(bg, CircleShape),
+        corner = 999.dp,
+    ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -192,7 +185,18 @@ private fun StatusPill(state: TunnelState) {
                     )
             }
             Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall, color = fg)
+            AnimatedContent(
+                targetState = label,
+                transitionSpec = {
+                    (slideInVertically(tween(180)) { height -> height / 4 } + fadeIn(tween(160)))
+                        .togetherWith(
+                            slideOutVertically(tween(140)) { height -> -height / 4 } + fadeOut(tween(120)),
+                        )
+                },
+                label = "tunnel-status-label",
+            ) { animatedLabel ->
+                Text(animatedLabel, style = MaterialTheme.typography.labelSmall, color = fg)
+            }
         }
     }
 }

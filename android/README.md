@@ -15,19 +15,19 @@ Aplikasi Android **NusaTunnel** — `com.nusa.tunnel`, developer **Xbibz Officia
 - UI "Midnight Aurora": liquid glass, tombol connect berdenyut, transisi animasi,
   font Montserrat offline, paginasi daftar server 15 + MUAT LAGI (+15)
 
-## Build
+## Build and signing
 
-Build lokal memerlukan JDK 21, Gradle 9.9.2, Android SDK platform 37.1/build-tools 37, serta kedua
-AAR di `app/libs/`. Workflow CI mengunduh versi yang dipin dan memeriksa SHA-256; AAR tidak
-disimpan di Git. Untuk build di lingkungan pengembang yang sudah disiapkan:
+Build/test Android untuk pekerjaan parity dan release dilakukan melalui GitHub Actions; jangan
+menjalankan Gradle lokal untuk slice ini. Workflow CI mengunduh versi AAR yang dipin dan
+memeriksa SHA-256; AAR tidak disimpan di Git.
 
-```bash
-cd android
-gradle :app:assembleNusaRelease
-```
-
-Keystore rilis dibuat via `./keystore-gen.sh` (keytool, self-signed Xbibz Official) —
-**jangan** commit keystore ke repo.
+Keystore lama pernah berada dalam riwayat repositori publik dan harus dianggap bocor. Jangan
+menggunakan atau membuat ulang keystore itu. Release baru memerlukan PKCS#12 baru yang dibuat
+di luar repositori, disimpan sebagai GitHub Actions secrets, dan SHA-256 sertifikatnya dicatat
+sebagai repository variable. Build CI biasa boleh memakai debug signing hanya untuk memeriksa
+assembly; artefak tersebut tidak boleh dipublikasikan. Lihat
+[`../docs/android-release-readiness.md`](../docs/android-release-readiness.md) untuk rotasi,
+secret names, migrasi pengguna, dan seluruh release gates.
 
 ## Struktur
 
