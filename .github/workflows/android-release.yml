@@ -71,9 +71,10 @@ jobs:
 
       - name: Download bundletool
         run: |
-          BT_URL=$(curl -fsSL https://api.github.com/repos/google/bundletool/releases/latest \
-            | python3 -c "import json,sys; d=json.load(sys.stdin); print(next(a['browser_download_url'] for a in d['assets'] if 'bundletool-all' in a['name']))")
-          curl -fL --retry 3 -o /tmp/bundletool.jar "$BT_URL"
+          # versi dipin langsung (tanpa API call -> bebas rate-limit 403)
+          BT_VERSION=1.18.3
+          curl -fL --retry 3 -o /tmp/bundletool.jar \
+            "https://github.com/google/bundletool/releases/download/${BT_VERSION}/bundletool-all-${BT_VERSION}.jar"
 
       - name: Build universal .apks dari AAB
         working-directory: android
