@@ -34,6 +34,7 @@ import com.nusa.tunnel.core.VpnAppInfo
 import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnApplicationCatalog
 import com.nusa.tunnel.core.VpnBehaviorSettings
+import com.nusa.tunnel.service.TunnelVpnService
 import com.nusa.tunnel.ui.AppRoot
 import com.nusa.tunnel.ui.Dest
 import com.nusa.tunnel.ui.theme.NusaTunnelTheme
@@ -47,6 +48,21 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val REQ_VPN = 2026
+    }
+
+    private fun openAndroidSettings(action: String, data: Uri? = null) {
+        runCatching {
+            startActivity(Intent(action).apply {
+                if (data != null) setData(data)
+            })
+        }
+            .onFailure {
+                Toast.makeText(
+                    this,
+                    "Pengaturan Android tidak dapat dibuka: ${it.message ?: "tidak tersedia"}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
     }
 
     private lateinit var store: ServerStore
@@ -96,6 +112,9 @@ class MainActivity : ComponentActivity() {
                 }
                 var autoPing by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.autoPingEnabled(this@MainActivity))
+                }
+                var keepCpuAwake by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.keepCpuAwake(this@MainActivity))
                 }
                 var vpnBehavior by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.vpnBehavior(this@MainActivity))
@@ -241,6 +260,25 @@ class MainActivity : ComponentActivity() {
                     onAutoPing = {
                         autoPing = it
                         TunnelSettings.setAutoPingEnabled(this@MainActivity, it)
+                    },
+                    keepCpuAwake = keepCpuAwake,
+                    onKeepCpuAwake = { enabled ->
+                        keepCpuAwake = enabled
+                        TunnelSettings.setKeepCpuAwake(this@MainActivity, enabled)
+                        if (status.state == TunnelState.Connected) {
+                            startService(Intent(this@MainActivity, TunnelVpnService::class.java).apply {
+                                action = TunnelVpnService.ACTION_REFRESH_WAKE_LOCK
+                            })
+                        }
+                    },
+                    onOpenBatterySettings = {
+                        openAndroidSettings(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", packageName, null),
+                        )
+                    },
+                    onOpenAlwaysOnVpnSettings = {
+                        openAndroidSettings(android.provider.Settings.ACTION_VPN_SETTINGS)
                     },
                     vpnBehavior = vpnBehavior,
                     onVpnBehavior = { next ->

@@ -36,6 +36,7 @@ class TunnelVpnService : VpnService() {
         const val ACTION_START = "com.nusa.tunnel.START"
         const val ACTION_START_CORE = "com.nusa.tunnel.START_CORE"
         const val ACTION_STOP = "com.nusa.tunnel.STOP"
+        const val ACTION_REFRESH_WAKE_LOCK = "com.nusa.tunnel.REFRESH_WAKE_LOCK"
         const val EXTRA_CONFIG = "config"
         const val EXTRA_TUN_FD = "tun_fd"
         const val EXTRA_UDP_ENGINE = "udp_engine"
@@ -50,16 +51,18 @@ class TunnelVpnService : VpnService() {
         private val starting = AtomicBoolean(false)
     }
 
-    private var vpnInterface: ParcelFileDescriptor? = null
+    @Volatile private var vpnInterface: ParcelFileDescriptor? = null
     private val engineLifecycleLock = Any()
     private val cleanupStarted = AtomicBoolean(false)
     private val hevMonitor = AtomicBoolean(false)
     @Volatile private var hevStarted = false
+    private lateinit var cpuWakeLockController: VpnCpuWakeLockController
 
     // ---------------------------------------------------------- lifecycle
 
     override fun onCreate() {
         super.onCreate()
+        cpuWakeLockController = VpnCpuWakeLockController(this)
         createChannel()
     }
 
@@ -93,6 +96,10 @@ class TunnelVpnService : VpnService() {
                 startCore(config, tunFd, engine, hevConfig)
             }
             ACTION_STOP -> stopSelfClean()
+            ACTION_REFRESH_WAKE_LOCK -> {
+                if (vpnInterface == null && !starting.get()) stopSelf()
+                else applyCpuWakeLock()
+            }
             else -> startAsForeground()
         }
         return START_NOT_STICKY
@@ -151,6 +158,7 @@ class TunnelVpnService : VpnService() {
                     return@synchronized
                 }
                 vpnInterface = established
+                applyCpuWakeLock()
                 if (cleanupStarted.get()) {
                     closeInterface()
                     return@synchronized
@@ -277,6 +285,7 @@ class TunnelVpnService : VpnService() {
 
     private fun stopSelfClean() {
         if (!cleanupStarted.compareAndSet(false, true)) return
+        releaseCpuWakeLock()
         hevMonitor.set(false)
         // Cancel stats before locking teardown; stopCoreSafely serializes native calls.
         TunnelManager.onServiceStopping()
@@ -302,7 +311,21 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    /** Hold a partial wake lock only while an established VPN interface is active. */
+    private fun applyCpuWakeLock() {
+        cpuWakeLockController.update(
+            preferenceEnabled = TunnelSettings.keepCpuAwake(this),
+            vpnInterfaceActive = vpnInterface != null,
+            stopping = cleanupStarted.get(),
+        )
+    }
+
+    private fun releaseCpuWakeLock() {
+        if (::cpuWakeLockController.isInitialized) cpuWakeLockController.release()
+    }
+
     private fun closeInterface() {
+        releaseCpuWakeLock()
         try {
             vpnInterface?.let {
                 runCatching { it.close() }
@@ -318,6 +341,7 @@ class TunnelVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        releaseCpuWakeLock()
         if (coreController != null) stopSelfClean()
         else closeInterface()
         super.onDestroy()
