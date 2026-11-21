@@ -332,7 +332,10 @@ private fun PerAppVpnPage(
         }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(
-            onClick = { onSave(VpnAppRoutingSettings(mode, selectedPackages)) },
+            onClick = {
+                onSave(VpnAppRoutingSettings(mode, selectedPackages))
+                onBack()
+            },
             enabled = mode != VpnAppRoutingMode.SelectedOnly || selectedPackages.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().testTag("save_vpn_app_routing"),
             shape = RoundedCornerShape(14.dp),
