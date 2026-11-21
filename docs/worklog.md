@@ -508,3 +508,12 @@ verdict SHIP.
 2. `parseQuery` menukar key↔value — parameter `security/type/sni/flow`
    link vless/trojan tidak pernah terbaca.
 Keduanya lolos ke v2.2.1 karena tanpa test; sekarang ada regression test.
+
+## 2026-11-21 — Rilis Android parsial v2.2.5
+
+- PR #2 (`5f89def`) sudah merge ke `main`; CI Android setelah merge lulus pada run [44889231145](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44889231145), termasuk KVM instrumentation. Pengujian instrumentation membuktikan alur UI/persistensi setting, bukan jaringan/VPN live.
+- Atas izin eksplisit pengguna, siapkan rilis Android **inkremental**, bukan klaim paritas penuh HTTP Custom: versionCode 6/versionName 2.2.5; catatan rilis menyebut log cap 100–10.000, DNS/MTU, dan keterbatasan verifikasi/fitur yang masih hilang.
+- Persiapan dirapikan dalam commit `1e5f593` (`Prepare Android v2.2.5 incremental release`) dan didorong ke `main`. Workflow Android CI remote run [44890112909](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44890112909) lulus untuk kedua job. Tidak ada build/test aplikasi yang dilakukan di sandbox.
+- Tag `v2.2.5` memicu workflow Android Release run [44890586912](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44890586912): test JVM + Xray config asli lulus; setelah itu build APK per-ABI/universal dan `.apks` sukses, lalu GitHub Release dipublikasikan.
+- Verifikasi rilis: [GitHub Release v2.2.5](https://github.com/XbibzOfficial777/NusaTunnel/releases/tag/v2.2.5) publik/non-draft; aset mencakup arm64-v8a, armeabi-v7a, x86, x86_64, universal APK, universal APKS, dan `SHA256SUMS.txt`. Seluruh enam checksum berhasil diverifikasi sesudah mengunduh aset. Universal APK sekitar 73.0 MB.
+- Batas tetap berlaku: ini rilis settings Android parsial; emulator tidak membuktikan routing VPN, resolusi DNS live, no-leak, hotspot, atau perilaku perangkat fisik. HTTP Custom belum full parity.
