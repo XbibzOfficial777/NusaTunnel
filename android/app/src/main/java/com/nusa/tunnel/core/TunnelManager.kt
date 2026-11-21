@@ -189,15 +189,18 @@ object TunnelManager {
                 UdpTunnelEngine.XrayNative
             } else requestedEngine
             val logLevel = TunnelSettings.logLevel(context)
+            val vpnBehavior = TunnelSettings.vpnBehavior(context)
             val config = XrayConfigBuilder.build(
                 p = profile,
                 socksPort = socksPort,
                 snifferEnabled = TunnelSettings.snifferEnabled(context),
                 includeTunInbound = engine == UdpTunnelEngine.XrayNative,
                 logLevel = logLevel.xrayValue,
+                mtu = vpnBehavior.mtu,
+                dnsServers = vpnBehavior.dnsServers,
             )
-            val hevConfig = HevConfigBuilder.build(socksPort, logLevel)
-            log("Engine UDP: ${engine.label}; log: ${logLevel.label}")
+            val hevConfig = HevConfigBuilder.build(socksPort, logLevel, vpnBehavior.mtu)
+            log("Engine UDP: ${engine.label}; log: ${logLevel.label}; MTU: ${vpnBehavior.mtu}; DNS: ${vpnBehavior.dnsServers.joinToString()}")
             log("Config Xray dibangun (${config.length} byte), memulai core (tunFd=$tunFd)…")
             _status.value = _status.value.copy(state = TunnelState.Connecting)
             context.startService(Intent(context, TunnelVpnService::class.java).apply {
