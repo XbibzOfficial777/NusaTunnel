@@ -129,10 +129,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
+          cmdline-tools-version: '15859902'
           packages: platform-tools
 
       - name: Install compile SDK and x86_64 emulator image
-        run: sdkmanager 'platform-tools' 'platforms;android-37' 'emulator' 'system-images;android-36;google_apis;x86_64'
+        run: sdkmanager 'platform-tools' 'platforms;android-37.1' 'build-tools;37.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
 
       - name: Require a usable KVM device
         run: |
