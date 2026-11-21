@@ -41,7 +41,7 @@ object TunnelManager {
 
     private const val TAG = "NusaTunnel"
     private const val PREFS = "nusatunnel_prefs"
-    private const val KEY_DEVICE = "xudp_device_id"
+    private const val KEY_DEVICE = "xudp_basekey"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -78,19 +78,38 @@ object TunnelManager {
             Seq.setContext(context.applicationContext)
             val files = context.filesDir.absolutePath
             copyGeoAssets(context, files)
-            val deviceId = deviceId(context)
-            Libv2ray.initCoreEnv(files, deviceId)
+            // xray.xudp.basekey WAJIB base64 URL-safe (tanpa padding) dari
+            // tepat 32 byte acak — UUID/string lain ditolak Xray-core:
+            // "invalid value (BaseKey must be 32 bytes)" → core init failed.
+            Libv2ray.initCoreEnv(files, xudpBaseKey(context))
             _status.value = _status.value.copy(engineVersion = engineVersion())
             log("Engine siap: ${engineVersion()}")
         }.onFailure { log("Gagal init engine: ${it.message}") }
     }
 
-    private fun deviceId(context: Context): String {
+    /** Kunci XUDP persisten: 32 byte acak, base64 URL-safe tanpa padding. */
+    private fun xudpBaseKey(context: Context): String {
         val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return sp.getString(KEY_DEVICE, null) ?: java.util.UUID.randomUUID().toString().also {
-            sp.edit().putString(KEY_DEVICE, it).apply()
+        val existing = sp.getString(KEY_DEVICE, null)
+        if (existing != null && isValidBaseKey(existing)) return existing
+        // regenerasi: key lama (UUID era v2.2.1) tidak valid
+        val key = java.security.SecureRandom().let { r ->
+            ByteArray(32).also { r.nextBytes(it) }
         }
+        val encoded = android.util.Base64.encodeToString(
+            key, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP,
+        )
+        sp.edit().putString(KEY_DEVICE, encoded).apply()
+        return encoded
     }
+
+    /** Validasi format persis seperti Xray-core common/xudp: RawURLEncoding, 32 byte. */
+    private fun isValidBaseKey(s: String): Boolean = runCatching {
+        val bytes = android.util.Base64.decode(
+            s, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP,
+        )
+        bytes.size == 32
+    }.getOrDefault(false)
 
     /** geoip.dat / geosite.dat dari AAR assets → filesDir (harus file nyata utk Xray). */
     private fun copyGeoAssets(context: Context, dir: String) {

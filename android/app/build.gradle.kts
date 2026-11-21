@@ -14,8 +14,8 @@ android {
         applicationId = "com.nusa.tunnel"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "2.2.1"
+        versionCode = 3
+        versionName = "2.2.2"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -99,4 +99,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Unit test JVM (LinkParser / XrayConfigBuilder / SmartImporter)
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

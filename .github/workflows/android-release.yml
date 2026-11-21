@@ -13,8 +13,71 @@ permissions:
   contents: write   # diperlukan untuk membuat Release & upload asset
 
 jobs:
+  # ================== TES ==================
+  # Semua rilis WAJIB lolos: unit test JVM + validasi config dengan
+  # Xray-core ASLI (xray run -test) sebelum build APK dijalankan.
+  test:
+    name: Test (unit + config engine asli)
+    runs-on: ubuntu-latest
+    env:
+      LIBXRAY_VERSION: v26.11.9
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle 9.9.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.9.2'
+
+      - name: Cache engine AAR
+        id: aar-cache-test
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/libxray.aar
+          key: libv2ray-${{ env.LIBXRAY_VERSION }}
+
+      - name: Download engine AAR (AndroidLibXrayLite)
+        if: steps.aar-cache-test.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/libxray.aar \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
+
+      # ---- 1. Unit test JVM (LinkParser / XrayConfigBuilder / SmartImporter)
+      - name: Unit test Kotlin (JVM)
+        working-directory: android
+        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Upload hasil test bila gagal
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: android/app/build/reports/tests/
+
+      # ---- 2. Validasi config dengan engine Xray-core ASLI
+      - name: Download Xray-core (engine yang sama dengan app)
+        run: |
+          curl -fL --retry 3 -o /tmp/xray.zip \
+            "https://github.com/XTLS/Xray-core/releases/download/${LIBXRAY_VERSION}/Xray-linux-64.zip"
+          mkdir -p /tmp/xray-bin && cd /tmp/xray-bin
+          unzip -o /tmp/xray.zip xray && chmod +x xray
+          ./xray version
+
+      - name: Validasi config builder dengan xray run -test
+        run: python3 ci/verify_xray_config.py /tmp/xray-bin/xray
+
+  # ================== BUILD & RELEASE ==================
   build-release:
     name: Build & Release APK
+    needs: test   # rilis diblokir bila ada tes gagal
     runs-on: ubuntu-latest
 
     env:

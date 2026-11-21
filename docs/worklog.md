@@ -475,3 +475,29 @@ Jika keystore asli masih ada di mesin lokal: base64-kan lalu set secret
 
 Identitas commit: `XbibzOfficial777 <xbibzke2@gmail.com>` (config lokal repo),
 credential helper persisten `--file=/home/z/my-project/.git-credentials`.
+
+## 2026-11-21 — v2.2.2: fix xudp basekey + CI testing menyeluruh + logo baru
+
+**Bug lapangan (screenshot user):** `core init failed > common/xudp:
+xray.xudp.basekey: invalid value (BaseKey must be 32 bytes)`.
+Akar masalah: `Libv2ray.initCoreEnv(envPath, key)` — parameter kedua adalah
+kunci enkripsi XUDP (harus base64url 32 byte acak), aplikasi mengirim UUID
+device. Fix: `TunnelManager.xudpBaseKey()` generate SecureRandom 32 byte,
+base64 URL_SAFE tanpa padding, persisten, + validasi format & migrasi
+otomatis dari UUID lama.
+
+**Testing di GitHub Actions (job `test` wajib sebelum release):**
+1. Unit test JVM: LinkParserTest (vmess/vless/trojan/ss + config JSON),
+   XrayConfigBuilderTest (regression 3 bug lapangan), SmartImporterTest.
+   Refactor `android.util.Base64` → `java.util.Base64` supaya testable.
+2. `ci/verify_xray_config.py`: validasi config builder dengan Xray-core
+   ASLI v26.11.9 (`xray run -test`) — 6 kombinasi protokol/transport,
+   regression bug outboundTag/port array (harus DITOLAK), regression
+   xudp basekey UUID (harus DITOLAK) vs 32-byte valid (harus LOLOS).
+   Terbukti lolos semua di lokal sebelum di-commit.
+
+**Logo baru "NT" (Midnight Aurora):** adaptive icon — latar mid-night +
+aurora glow (cyan/violet), ring orbit gradient, node jaringan, monogram
+NT gradasi teal→sky→indigo. Plus monochrome (themed icon Android 13+)
+dan glyph notifikasi NT 24dp. Dipreview via VLM multi-iterasi hingga
+verdict SHIP.

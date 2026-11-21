@@ -1,6 +1,6 @@
 package com.nusa.tunnel.core
 
-import android.util.Base64
+import java.util.Base64
 import java.util.UUID
 
 /**
@@ -289,7 +289,7 @@ object LinkParser {
             3 -> cleaned + "="
             else -> cleaned
         }
-        String(Base64.decode(padded, Base64.NO_WRAP), Charsets.UTF_8)
+        String(Base64.getMimeDecoder().decode(padded), Charsets.UTF_8)
     } catch (e: Exception) {
         null
     }

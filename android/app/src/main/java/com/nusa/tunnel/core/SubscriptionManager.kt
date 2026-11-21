@@ -1,11 +1,11 @@
 package com.nusa.tunnel.core
 
-import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Base64
 
 /**
  * Subscription URL — gaya v2rayNG/HTTP Custom:
@@ -133,7 +133,7 @@ object SubscriptionManager {
             3 -> cleaned + "="
             else -> cleaned
         }
-        String(Base64.decode(padded, Base64.NO_WRAP), Charsets.UTF_8)
+        String(Base64.getMimeDecoder().decode(padded), Charsets.UTF_8)
     } catch (e: Exception) {
         null
     }

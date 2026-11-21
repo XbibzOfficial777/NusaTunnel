@@ -1,10 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- lingkaran luar aurora -->
-    <path android:fillColor="#00C27A"
-        android:pathData="M54,22C36.33,22 22,36.33 22,54s14.33,32 32,32 32,-14.33 32,-32S71.67,22 54,22zM54,78c-13.25,0 -24,-10.75 -24,-24s10.75,-24 24,-24 24,10.75 24,24 -10.75,24 -24,24z"/>
-    <!-- petir -->
-    <path android:fillColor="#7CE8B4"
-        android:pathData="M58,38L42,58h10l-4,14 18,-24H54z"/>
+
+    <!-- NusaTunnel "NT" — ring orbit + node komet + monogram gradasi aurora.
+         Semua elemen dalam safe zone 66dp (radius 33 dari pusat 54,54). -->
+
+    <!-- ring orbit (r=32, stroke 2.6) -->
+    <path
+        android:pathData="M22,54 a32,32 0 1,0 64,0 a32,32 0 1,0 -64,0"
+        android:strokeWidth="2.6"
+        android:strokeAlpha="0.72"
+        android:fillColor="#00000000">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear"
+                android:startX="22" android:startY="22"
+                android:endX="86" android:endY="86">
+                <item android:offset="0" android:color="#FF67E8F9"/>
+                <item android:offset="1" android:color="#FFC4B5FD"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- kepala node jaringan di ring: glow + titik crisp -->
+    <path
+        android:pathData="M27,32.8 a5.8,5.8 0 1,0 11.6,0 a5.8,5.8 0 1,0 -11.6,0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="32.8" android:centerY="32.8" android:gradientRadius="5.8">
+                <item android:offset="0" android:color="#D97DD3FC"/>
+                <item android:offset="1" android:color="#007DD3FC"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M29.8,32.8 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"
+        android:fillColor="#FFBAE6FD"/>
+
+    <!-- monogram N -->
+    <path
+        android:pathData="M30,39 L36.5,39 L48,58.5 L48,39 L54.5,39 L54.5,69 L48,69 L36.5,49.5 L36.5,69 L30,69 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="30" android:startY="39"
+                android:endX="78" android:endY="69">
+                <item android:offset="0" android:color="#FF6EE7B7"/>
+                <item android:offset="0.5" android:color="#FF38BDF8"/>
+                <item android:offset="1" android:color="#FFA5B4FC"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- monogram T -->
+    <path
+        android:pathData="M58,39 L78,39 L78,45 L70.5,45 L70.5,69 L64.5,69 L64.5,45 L58,45 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="30" android:startY="39"
+                android:endX="78" android:endY="69">
+                <item android:offset="0" android:color="#FF6EE7B7"/>
+                <item android:offset="0.5" android:color="#FF38BDF8"/>
+                <item android:offset="1" android:color="#FFA5B4FC"/>
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

@@ -1,5 +1,7 @@
 package com.nusa.tunnel.core
 
+import java.util.Base64
+
 /**
  * Import pintar ala HTTP Custom — user menempelkan APA PUN, sistem mendeteksi otomatis:
  *
@@ -79,7 +81,7 @@ object SmartImporter {
             3 -> cleaned + "="
             else -> cleaned
         }
-        val bytes = android.util.Base64.decode(padded, android.util.Base64.NO_WRAP)
+        val bytes = Base64.getMimeDecoder().decode(padded)
         // pastikan hasilnya teks layak (bukan sampah biner)
         val str = String(bytes, Charsets.UTF_8)
         if (str.any { it == '\uFFFD' }) null else str
