@@ -14,8 +14,8 @@ android {
         applicationId = "com.nusa.tunnel"
         minSdk = 26
         targetSdk = 37
-        versionCode = 4
-        versionName = "2.2.3"
+        versionCode = 5
+        versionName = "2.2.4"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -63,12 +63,12 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        jniLibs.useLegacyPackaging = false
+        // Keep download APKs compact; Android extracts the compressed native libraries at install.
+        jniLibs.useLegacyPackaging = true
     }
 
-    androidResources {
-        noCompress += listOf("dat", "aar")
-    }
+    // GeoIP/geosite assets are compressed inside the APK and decompressed by AssetManager
+    // when copied into filesDir for Xray. Leaving .dat uncompressed bloats every APK variant.
 }
 
 kotlin {
@@ -86,16 +86,13 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.compose.animation)
-    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

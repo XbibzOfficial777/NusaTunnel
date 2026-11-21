@@ -3,6 +3,7 @@ package com.nusa.tunnel.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
@@ -14,14 +15,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddLink
 import androidx.compose.material.icons.rounded.Bolt
@@ -40,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,11 +61,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.nusa.tunnel.core.ServerProfile
-import com.nusa.tunnel.core.TunnelManager
-import com.nusa.tunnel.core.TunnelState
 import com.nusa.tunnel.ui.components.GlassCard
 import com.nusa.tunnel.ui.theme.AuroraGradient
+import com.nusa.tunnel.ui.theme.Danger
 import com.nusa.tunnel.ui.theme.Frost
 import com.nusa.tunnel.ui.theme.FrostDim
 import com.nusa.tunnel.ui.theme.FrostFaint
@@ -214,20 +219,33 @@ fun ServersScreen(
         // tombol import melayang
         var showAdd by remember { mutableStateOf(false) }
         var importBusy by remember { mutableStateOf(false) }
-        AddFab(onClick = { showAdd = true })
+        var importError by remember { mutableStateOf<String?>(null) }
+        AddFab(onClick = {
+            importError = null
+            showAdd = true
+        })
 
         if (showAdd) {
             AddDialog(
                 busy = importBusy,
+                error = importError,
                 onDismiss = { if (!importBusy) showAdd = false },
                 onAdd = { links ->
                     scope.launch {
                         importBusy = true
-                        val (n, err) = onAdd(links)
-                        importBusy = false
-                        if (err == null) {
-                            showAdd = false
-                            TunnelManager.log("Import: $n server baru")
+                        importError = null
+                        try {
+                            val (count, error) = onAdd(links)
+                            when {
+                                error != null -> importError = error
+                                count <= 0 -> importError = "Tidak ada server yang berhasil diimpor."
+                                else -> showAdd = false
+                            }
+                        } catch (e: Exception) {
+                            importError = e.message?.takeIf { it.isNotBlank() }
+                                ?: "Import gagal. Periksa format dan coba lagi."
+                        } finally {
+                            importBusy = false
                         }
                     }
                 },
@@ -464,28 +482,41 @@ private fun AddFab(onClick: () -> Unit) {
 }
 
 @Composable
-private fun AddDialog(busy: Boolean, onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+private fun AddDialog(
+    busy: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+) {
     var text by remember { mutableStateOf("") }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        GlassCard(
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
-            corner = 24.dp,
+                .padding(8.dp)
+                .heightIn(max = 560.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF101722),
+            contentColor = Frost,
+            shadowElevation = 20.dp,
+            border = BorderStroke(1.dp, Color(0xFF364253)),
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+            ) {
                 Text(
-                    "Import Server",
+                    "Import server",
                     style = MaterialTheme.typography.titleLarge,
                     color = Frost,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Tempel APA PUN — dideteksi otomatis:\n" +
-                        "• link vmess:// vless:// trojan:// ss://\n" +
-                        "• URL subscription http(s)\n" +
-                        "• blob base64\n" +
-                        "• config JSON Xray",
+                    "Tempel link atau konfigurasi. Format yang didukung:\n" +
+                        "• vmess://, vless://, trojan://, ss://\n" +
+                        "• URL subscription HTTP(S)\n" +
+                        "• teks base64 atau JSON Xray",
                     style = MaterialTheme.typography.bodySmall,
                     color = FrostDim,
                 )
@@ -495,31 +526,43 @@ private fun AddDialog(busy: Boolean, onDismiss: () -> Unit, onAdd: (String) -> U
                     onValueChange = { text = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp),
-                    placeholder = { Text("vmess://eyJ2IjoiMiIs… / https://… / { \"outbounds\": … }") },
+                        .heightIn(min = 120.dp, max = 200.dp),
+                    placeholder = { Text("vmess://… / https://… / { \"outbounds\": … }") },
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Spruce,
-                        unfocusedBorderColor = Color(0x22FFFFFF),
+                        unfocusedBorderColor = Color(0x55677788),
                         focusedTextColor = Frost,
                         unfocusedTextColor = Frost,
                         cursorColor = Spruce,
                     ),
                 )
+                if (error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Danger,
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = onDismiss, enabled = !busy) { Text("BATAL", color = FrostDim) }
+                    TextButton(onClick = onDismiss, enabled = !busy) {
+                        Text("BATAL", color = FrostDim)
+                    }
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = { onAdd(text) },
                         enabled = text.isNotBlank() && !busy,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Spruce, contentColor = Color(0xFF07131F),
+                            containerColor = Spruce,
+                            contentColor = Color(0xFF07131F),
                         ),
                     ) {
                         if (busy) {

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.UdpTunnelEngine
 import com.nusa.tunnel.ui.screens.DashboardScreen
 import com.nusa.tunnel.ui.screens.LogsScreen
@@ -68,6 +69,8 @@ fun AppRoot(
     onUdpEngine: (UdpTunnelEngine) -> Unit,
     logLevel: EngineLogLevel,
     onLogLevel: (EngineLogLevel) -> Unit,
+    logRetention: LogRetention,
+    onLogRetention: (LogRetention) -> Unit,
     autoPing: Boolean,
     onAutoPing: (Boolean) -> Unit,
     subUrl: String,
@@ -146,6 +149,8 @@ fun AppRoot(
                         onUdpEngine = onUdpEngine,
                         logLevel = logLevel,
                         onLogLevel = onLogLevel,
+                        logRetention = logRetention,
+                        onLogRetention = onLogRetention,
                         autoPing = autoPing,
                         onAutoPing = onAutoPing,
                     )

@@ -11,6 +11,9 @@ Audit date: 2026-11-21. This matrix describes the Android implementation, not th
 | XHTTP and HTTPUpgrade | URL path/host/mode/`extra` and HTTPUpgrade path/host are mapped into Xray stream settings. XHTTP/REALITY and HTTPUpgrade configs are validated against the same Xray-core release as the Android AAR. |
 | UDP packet engine | Persistent manual selector. HevSocks5Tunnel is the default on Android 10+; Xray native TUN is an alternate. Older Android versions fall back to Xray native TUN because the pinned Hev AAR declares API 29. |
 | Engine logs | Warning, Verbose (Xray `debug`), and Error levels; takes effect on the next connection. |
+| Log retention | Persists a 100 / 400 / 1,000-entry in-memory cap; changing it trims the current log immediately. |
+| SOCKS5 port | Persists and validates ports 1–65535; rejects invalid input before connecting and applies the saved port on the next connection. |
+| Destination sniffing | Persists the switch and passes it into the generated Xray config for active inbounds; changes apply on the next connection. |
 | Auto-ping | Opt-in: pings the selected server every five minutes only while the app is foregrounded and the VPN is disconnected. Off by default to avoid extra idle traffic. |
 
 Hev mode uses the Android VPN TUN fd in HevSocks5Tunnel and keeps Xray as a local SOCKS5 proxy. Its native worker is health-checked and stopped before Xray during teardown. The Xray-native mode remains available as a fallback.

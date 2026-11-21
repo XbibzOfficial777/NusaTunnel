@@ -250,10 +250,31 @@ class XrayConfigBuilderTest {
     }
 
     @Test
-    fun `sniffer - destOverride berisi http tls quic`() {
-        val sniffing = build(trojan)["inbounds"]!!.jsonArray[1].jsonObject["sniffing"]!!.jsonObject
-        val dest = sniffing["destOverride"] as JsonArray
-        assertEquals(listOf("http", "tls", "quic"), dest.map { (it as kotlinx.serialization.json.JsonPrimitive).content })
+    fun `sniffer enabled - applies http tls quic overrides to all active inbounds`() {
+        val inbounds = build(trojan)["inbounds"]!!.jsonArray
+        assertEquals(2, inbounds.size)
+        inbounds.forEach { inbound ->
+            val sniffing = inbound.jsonObject["sniffing"]!!.jsonObject
+            assertEquals(true, (sniffing["enabled"] as JsonPrimitive).content.toBoolean())
+            val dest = sniffing["destOverride"] as JsonArray
+            assertEquals(
+                listOf("http", "tls", "quic"),
+                dest.map { (it as JsonPrimitive).content },
+            )
+        }
+    }
+
+    @Test
+    fun `sniffer disabled - setting is honored without destination overrides`() {
+        val root = Json.parseToJsonElement(
+            XrayConfigBuilder.build(trojan, 10808, snifferEnabled = false),
+        ).jsonObject
+        val inbounds = root["inbounds"]!!.jsonArray
+        inbounds.forEach { inbound ->
+            val sniffing = inbound.jsonObject["sniffing"]!!.jsonObject
+            assertEquals(false, (sniffing["enabled"] as JsonPrimitive).content.toBoolean())
+            assertFalse(sniffing.containsKey("destOverride"))
+        }
     }
 
     @Test

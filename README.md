@@ -28,7 +28,7 @@ Semua installer ada di tab **Releases**:
 | Windows 10/11 (x64) | `NusaTunnel-<versi>-Windows-x64.zip` |
 | macOS Apple Silicon | `NusaTunnel-<versi>-macOS-AppleSilicon.zip` |
 | macOS Intel | `NusaTunnel-<versi>-macOS-Intel.zip` |
-| Android (universal, 4 ABI) | `NusaTunnel-v2.2.3-universal.apk` |
+| Android (universal, 4 ABI) | `NusaTunnel-v2.2.4-universal.apk` |
 
 ## Struktur repo
 

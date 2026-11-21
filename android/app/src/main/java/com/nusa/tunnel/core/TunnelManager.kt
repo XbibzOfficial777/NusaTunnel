@@ -52,10 +52,12 @@ object TunnelManager {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
+    @Volatile private var maxLogEntries = LogRetention.Standard.preferenceValue
+
     @Volatile var currentProfile: ServerProfile? = null
         private set
 
-    @Volatile var socksPort: Int = 10808
+    @Volatile var socksPort: Int = TunnelSettings.DEFAULT_SOCKS_PORT
         private set
 
     @Volatile private var statsJob: Job? = null
@@ -73,16 +75,23 @@ object TunnelManager {
         Log.d(TAG, line)
         val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date())
-        _logs.value = (_logs.value + "[$stamp] $line").takeLast(400)
+        _logs.value = (_logs.value + "[$stamp] $line").takeLast(maxLogEntries)
     }
 
     fun clearLogs() { _logs.value = emptyList() }
+
+    /** Applies a user-selected in-memory history limit and trims older entries immediately. */
+    fun setLogRetention(retention: LogRetention) {
+        maxLogEntries = retention.preferenceValue
+        _logs.value = _logs.value.takeLast(retention.preferenceValue)
+    }
 
     fun engineVersion(): String = runCatching { Libv2ray.checkVersionX() }
         .getOrDefault("Xray-core (libxray)")
 
     /** Harus dipanggil sekali dari Application.onCreate. */
     fun initEngine(context: Context) {
+        setLogRetention(TunnelSettings.logRetention(context))
         runCatching {
             Seq.setContext(context.applicationContext)
             val files = context.filesDir.absolutePath
@@ -140,8 +149,10 @@ object TunnelManager {
         if (_status.value.state == TunnelState.Connecting ||
             _status.value.state == TunnelState.Connected
         ) return
-        this.socksPort = socksPort.takeIf { it in 1..65535 } ?: 10808
-        if (this.socksPort != socksPort) log("Port SOCKS tidak valid; memakai port default 10808")
+        this.socksPort = socksPort.takeIf { it in 1..65_535 } ?: TunnelSettings.DEFAULT_SOCKS_PORT
+        if (this.socksPort != socksPort) {
+            log("Port SOCKS tidak valid; memakai port default ${TunnelSettings.DEFAULT_SOCKS_PORT}")
+        }
         currentProfile = profile
         trafficTotals.reset()
         _status.value = TunnelStatus(
@@ -181,6 +192,7 @@ object TunnelManager {
             val config = XrayConfigBuilder.build(
                 p = profile,
                 socksPort = socksPort,
+                snifferEnabled = TunnelSettings.snifferEnabled(context),
                 includeTunInbound = engine == UdpTunnelEngine.XrayNative,
                 logLevel = logLevel.xrayValue,
             )

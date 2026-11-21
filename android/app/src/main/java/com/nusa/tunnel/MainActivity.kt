@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LinkParser
+import com.nusa.tunnel.core.LogRetention
 import com.nusa.tunnel.core.ServerStore
 import com.nusa.tunnel.core.SmartImporter
 import com.nusa.tunnel.core.SubscriptionManager
@@ -45,7 +46,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var store: ServerStore
-    private var pendingSocksPort = 10808
+    private var pendingSocksPort = TunnelSettings.DEFAULT_SOCKS_PORT
 
     /** Navigasi tertunda dari intent import (state agar memicu recomposisi). */
     private var pendingNav by mutableStateOf<Dest?>(null)
@@ -72,20 +73,24 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(setOf<String>())
                 }
                 var socksPort by androidx.compose.runtime.remember {
-                    mutableStateOf("10808")
+                    mutableStateOf(TunnelSettings.socksPort(this@MainActivity).toString())
                 }
-                var sniffer by androidx.compose.runtime.remember { mutableStateOf(true) }
+                var sniffer by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.snifferEnabled(this@MainActivity))
+                }
                 var udpEngine by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.udpTunnelEngine(this@MainActivity))
                 }
                 var logLevel by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.logLevel(this@MainActivity))
                 }
+                var logRetention by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.logRetention(this@MainActivity))
+                }
                 var autoPing by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.autoPingEnabled(this@MainActivity))
                 }
                 var subBusy by androidx.compose.runtime.remember { mutableStateOf(false) }
-                var importBusy by androidx.compose.runtime.remember { mutableStateOf(false) }
 
                 val latestServers by rememberUpdatedState(servers)
                 val latestTunnelState by rememberUpdatedState(status.state)
@@ -126,10 +131,17 @@ class MainActivity : ComponentActivity() {
                                         TunnelManager.log("Tidak ada server — tambahkan lewat menu Server")
                                         dest = Dest.Servers
                                     } else {
-                                        prepareVpnThenConnect(
-                                            profile,
-                                            socksPort.toIntOrNull() ?: 10808,
-                                        )
+                                        val port = TunnelSettings.parseSocksPort(socksPort)
+                                        if (port == null) {
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Port SOCKS harus berada di rentang 1–65535",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            dest = Dest.Settings
+                                        } else {
+                                            prepareVpnThenConnect(profile, port)
+                                        }
                                     }
                                 }
                             }
@@ -140,9 +152,7 @@ class MainActivity : ComponentActivity() {
                     pingBusy = pingBusy,
                     onAddServers = { text ->
                         // import pintar: link / banyak baris / base64 / JSON / URL subscription
-                        importBusy = true
                         val res = withContext(Dispatchers.IO) { SmartImporter.importText(text) }
-                        importBusy = false
                         if (res.error != null) {
                             TunnelManager.log("Import gagal: ${res.error}")
                             0 to res.error
@@ -172,9 +182,18 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     socksPort = socksPort,
-                    onSocksPort = { socksPort = it },
+                    onSocksPort = { value ->
+                        val next = value.filter { it.isDigit() }.take(5)
+                        socksPort = next
+                        TunnelSettings.parseSocksPort(next)?.let { port ->
+                            TunnelSettings.setSocksPort(this@MainActivity, port)
+                        }
+                    },
                     sniffer = sniffer,
-                    onSniffer = { sniffer = it },
+                    onSniffer = { enabled ->
+                        sniffer = enabled
+                        TunnelSettings.setSnifferEnabled(this@MainActivity, enabled)
+                    },
                     udpEngine = udpEngine,
                     onUdpEngine = {
                         udpEngine = it
@@ -184,6 +203,12 @@ class MainActivity : ComponentActivity() {
                     onLogLevel = {
                         logLevel = it
                         TunnelSettings.setLogLevel(this@MainActivity, it)
+                    },
+                    logRetention = logRetention,
+                    onLogRetention = { retention ->
+                        logRetention = retention
+                        TunnelSettings.setLogRetention(this@MainActivity, retention)
+                        TunnelManager.setLogRetention(retention)
                     },
                     autoPing = autoPing,
                     onAutoPing = {
@@ -297,7 +322,7 @@ class MainActivity : ComponentActivity() {
     // ---------------------------------------------------------- vpn
 
     private fun prepareVpnThenConnect(profile: com.nusa.tunnel.core.ServerProfile, port: Int) {
-        pendingSocksPort = port.takeIf { it in 1..65535 } ?: 10808
+        pendingSocksPort = port.takeIf { it in 1..65_535 } ?: TunnelSettings.DEFAULT_SOCKS_PORT
         val intent = VpnService.prepare(this)
         if (intent != null) {
             @Suppress("DEPRECATION")
