@@ -20,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.nusa.tunnel.core.ConnectionCheckSettings
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LinkParser
 import com.nusa.tunnel.core.ServerStore
@@ -115,6 +116,9 @@ class MainActivity : ComponentActivity() {
                 }
                 var keepCpuAwake by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.keepCpuAwake(this@MainActivity))
+                }
+                var connectionCheck by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.connectionCheck(this@MainActivity))
                 }
                 var vpnBehavior by androidx.compose.runtime.remember {
                     mutableStateOf(TunnelSettings.vpnBehavior(this@MainActivity))
@@ -269,6 +273,19 @@ class MainActivity : ComponentActivity() {
                             startService(Intent(this@MainActivity, TunnelVpnService::class.java).apply {
                                 action = TunnelVpnService.ACTION_REFRESH_WAKE_LOCK
                             })
+                        }
+                    },
+                    connectionCheck = connectionCheck,
+                    onConnectionCheck = { next ->
+                        if (TunnelSettings.setConnectionCheck(this@MainActivity, next)) {
+                            connectionCheck = next
+                            TunnelManager.onConnectionCheckSettingsChanged(this@MainActivity, next)
+                        } else {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "URL, interval, timeout, atau jumlah percobaan tidak valid",
+                                Toast.LENGTH_LONG,
+                            ).show()
                         }
                     },
                     onOpenBatterySettings = {

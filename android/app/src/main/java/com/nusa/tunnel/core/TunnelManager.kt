@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import libv2ray.CoreCallbackHandler
 import libv2ray.Libv2ray
@@ -48,6 +49,7 @@ object TunnelManager {
     private const val KEY_DEVICE = "xudp_basekey"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @Volatile private var appContext: Context? = null
 
     private val _status = MutableStateFlow(TunnelStatus())
     val status: StateFlow<TunnelStatus> = _status.asStateFlow()
@@ -73,6 +75,30 @@ object TunnelManager {
     // Serialize stats queries against stopLoop(); the native stats manager can be
     // torn down while the VPN service is shutting down.
     private val coreApiLock = Any()
+
+    private val connectionCheckMonitor = ConnectionCheckMonitor(
+        scope = scope,
+        probe = { url, port, timeoutMillis ->
+            withContext(Dispatchers.IO) { Socks5HttpProbe.check(url, port, timeoutMillis) }
+        },
+        onAttempt = { attempt, maxAttempts, result, error ->
+            when {
+                result?.succeeded == true -> log(
+                    "Connection check OK: HTTP ${result.statusCode}, ${result.elapsedMillis} ms",
+                )
+                result != null -> log(
+                    "Connection check gagal: HTTP ${result.statusCode}, attempt $attempt/$maxAttempts",
+                )
+                else -> log(
+                    "Connection check error, attempt $attempt/$maxAttempts: ${error?.message ?: "unknown"}",
+                )
+            }
+        },
+        onStopAfterFailure = {
+            appContext?.let { context -> disconnect(context) }
+                ?: log("Connection check exhausted attempts, but app context is unavailable")
+        },
+    )
 
     fun log(line: String) {
         Log.d(TAG, line)
@@ -101,6 +127,7 @@ object TunnelManager {
 
     /** Harus dipanggil sekali dari Application.onCreate. */
     fun initEngine(context: Context) {
+        appContext = context.applicationContext
         setLogEntryLimit(TunnelSettings.logEntryLimit(context))
         runCatching {
             Seq.setContext(context.applicationContext)
@@ -184,6 +211,7 @@ object TunnelManager {
             downloadBytesPerSecond = 0L,
         )
         stopStatsPolling()
+        connectionCheckMonitor.stop()
         log("Memutuskan tunnel…")
         context.startService(Intent(context, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_STOP
@@ -227,11 +255,43 @@ object TunnelManager {
         }
     }
 
-    fun onCoreStarted() {
+    fun onCoreStarted(context: Context) {
+        appContext = context.applicationContext
         coreStarted = true
         _status.value = _status.value.copy(state = TunnelState.Connected)
         log("Tunnel TERHUBUNG — ${currentProfile?.remarks}")
         startStatsPolling()
+        startConnectionCheckMonitoring(context.applicationContext)
+    }
+
+    fun onConnectionCheckSettingsChanged(context: Context, settings: ConnectionCheckSettings) {
+        appContext = context.applicationContext
+        if (_status.value.state != TunnelState.Connected) {
+            connectionCheckMonitor.stop()
+            return
+        }
+        log(
+            if (settings.enabled) {
+                "Connection check enabled, every ${settings.intervalSeconds}s"
+            } else {
+                "Connection check disabled"
+            },
+        )
+        connectionCheckMonitor.start(settings, socksPort) {
+            _status.value.state == TunnelState.Connected
+        }
+    }
+
+    private fun startConnectionCheckMonitoring(context: Context) {
+        val settings = TunnelSettings.connectionCheck(context)
+        if (!settings.enabled) {
+            connectionCheckMonitor.stop()
+            return
+        }
+        log("Connection check armed, every ${settings.intervalSeconds}s")
+        connectionCheckMonitor.start(settings, socksPort) {
+            _status.value.state == TunnelState.Connected
+        }
     }
 
     fun onCoreError(message: String) {
@@ -244,15 +304,18 @@ object TunnelManager {
         )
         log("Error core: $message")
         stopStatsPolling()
+        connectionCheckMonitor.stop()
     }
 
     /** Hentikan polling sebelum VpnService mulai mematikan native core. */
     fun onServiceStopping() {
         stopStatsPolling()
+        connectionCheckMonitor.stop()
     }
 
     fun onServiceDestroyed() {
         stopStatsPolling()
+        connectionCheckMonitor.stop()
         coreStarted = false
         trafficTotals.reset()
         if (_status.value.state != TunnelState.Error) {

@@ -220,7 +220,7 @@ class TunnelVpnService : VpnService() {
                         startHevMonitor()
                     }
                     if (cleanupStarted.get()) return@synchronized
-                    TunnelManager.onCoreStarted()
+                    TunnelManager.onCoreStarted(this)
                 } catch (e: Exception) {
                     newController?.takeIf { coreController !== it }?.let { controller ->
                         runCatching { controller.stopLoop() }

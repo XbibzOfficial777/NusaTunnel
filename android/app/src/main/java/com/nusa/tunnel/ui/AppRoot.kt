@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.nusa.tunnel.core.ConnectionCheckSettings
 import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.UdpTunnelEngine
@@ -80,6 +81,8 @@ fun AppRoot(
     onAutoPing: (Boolean) -> Unit,
     keepCpuAwake: Boolean,
     onKeepCpuAwake: (Boolean) -> Unit,
+    connectionCheck: ConnectionCheckSettings,
+    onConnectionCheck: (ConnectionCheckSettings) -> Unit,
     onOpenBatterySettings: () -> Unit,
     onOpenAlwaysOnVpnSettings: () -> Unit,
     vpnBehavior: VpnBehaviorSettings,
@@ -172,6 +175,8 @@ fun AppRoot(
                         onAutoPing = onAutoPing,
                         keepCpuAwake = keepCpuAwake,
                         onKeepCpuAwake = onKeepCpuAwake,
+                        connectionCheck = connectionCheck,
+                        onConnectionCheck = onConnectionCheck,
                         onOpenBatterySettings = onOpenBatterySettings,
                         onOpenAlwaysOnVpnSettings = onOpenAlwaysOnVpnSettings,
                         vpnBehavior = vpnBehavior,

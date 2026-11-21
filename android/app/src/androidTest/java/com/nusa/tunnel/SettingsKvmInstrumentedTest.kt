@@ -3,6 +3,7 @@ package com.nusa.tunnel
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.nusa.tunnel.core.ConnectionCheckSettings
 import com.nusa.tunnel.core.SpeedUnit
 import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.VpnAppRoutingMode
@@ -18,6 +20,7 @@ import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnApplicationCatalog
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -118,6 +121,70 @@ class SettingsKvmInstrumentedTest {
             compose.onNodeWithTag("keep_cpu_awake_switch").performScrollTo().assertIsOn()
         } finally {
             TunnelSettings.setKeepCpuAwake(context, original)
+        }
+    }
+
+    @Test
+    fun connectionCheckSettingsValidatePersistAndSurviveActivityRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val original = TunnelSettings.connectionCheck(context)
+        try {
+            assertFalse(
+                TunnelSettings.setConnectionCheck(
+                    context,
+                    original.copy(maxAttempts = ConnectionCheckSettings.MIN_MAX_ATTEMPTS - 1),
+                ),
+            )
+            assertEquals(original, TunnelSettings.connectionCheck(context))
+
+            compose.onNodeWithText("Atur").performClick()
+            compose.onNodeWithTag("connection_check_row").performScrollTo().performClick()
+
+            compose.onNodeWithTag("connection_check_url").performScrollTo()
+                .performTextReplacement("ftp://check.example/status")
+            compose.onNodeWithTag("save_connection_check").performScrollTo().assertIsNotEnabled()
+            assertEquals(original, TunnelSettings.connectionCheck(context))
+
+            compose.onNodeWithTag("connection_check_url").performTextReplacement("https://check.example/status")
+            compose.onNodeWithTag("connection_check_interval").performScrollTo()
+                .performTextReplacement("30")
+            compose.onNodeWithTag("connection_check_timeout").performScrollTo()
+                .performTextReplacement("5")
+            compose.onNodeWithTag("connection_check_attempts").performScrollTo()
+                .performTextReplacement("2")
+            if (!original.enabled) {
+                compose.onNodeWithTag("connection_check_enabled").performScrollTo().performClick()
+            }
+            if (!original.stopOnFailure) {
+                compose.onNodeWithTag("connection_check_stop_on_failure").performScrollTo().performClick()
+            }
+            compose.onNodeWithTag("save_connection_check").performScrollTo().performClick()
+
+            val expected = ConnectionCheckSettings(
+                enabled = true,
+                url = "https://check.example/status",
+                intervalSeconds = 30,
+                timeoutSeconds = 5,
+                maxAttempts = 2,
+                stopOnFailure = true,
+            )
+            assertEquals(expected, TunnelSettings.connectionCheck(context))
+
+            compose.activityRule.scenario.recreate()
+            compose.waitForIdle()
+            compose.onNodeWithTag("connection_check_row").performScrollTo().performClick()
+            compose.onNodeWithTag("connection_check_url").performScrollTo()
+                .assertTextEquals("HTTP(S) URL", "https://check.example/status")
+            compose.onNodeWithTag("connection_check_interval").performScrollTo()
+                .assertTextEquals("Interval (5–3600s)", "30")
+            compose.onNodeWithTag("connection_check_timeout").performScrollTo()
+                .assertTextEquals("Timeout (1–60s)", "5")
+            compose.onNodeWithTag("connection_check_attempts").performScrollTo()
+                .assertTextEquals("Maximum attempts (1–10)", "2")
+            compose.onNodeWithTag("connection_check_enabled").performScrollTo().assertIsOn()
+            compose.onNodeWithTag("connection_check_stop_on_failure").performScrollTo().assertIsOn()
+        } finally {
+            TunnelSettings.setConnectionCheck(context, original)
         }
     }
 
