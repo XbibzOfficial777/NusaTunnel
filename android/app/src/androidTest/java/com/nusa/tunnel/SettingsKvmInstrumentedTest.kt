@@ -1,6 +1,6 @@
 package com.nusa.tunnel
 
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -58,7 +58,7 @@ class SettingsKvmInstrumentedTest {
 
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
-        compose.onNodeWithText("250 entries · older entries are trimmed immediately").assertExists()
+        compose.onNodeWithText("250 entries · older entries are trimmed immediately").assertIsDisplayed()
 
         compose.onNodeWithTag("log_entry_limit_row").performScrollTo().performClick()
         compose.onNodeWithTag("log_entry_limit_input").performTextReplacement("99")
