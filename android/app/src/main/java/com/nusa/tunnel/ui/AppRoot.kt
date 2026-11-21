@@ -1,0 +1,131 @@
+package com.nusa.tunnel.ui
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import com.nusa.tunnel.ui.screens.DashboardScreen
+import com.nusa.tunnel.ui.screens.LogsScreen
+import com.nusa.tunnel.ui.screens.ServersScreen
+import com.nusa.tunnel.ui.screens.SettingsScreen
+import com.nusa.tunnel.ui.theme.Aurora1
+import com.nusa.tunnel.ui.theme.Frost
+import com.nusa.tunnel.ui.theme.FrostDim
+import com.nusa.tunnel.ui.theme.Spruce
+
+enum class Dest(
+    val label: String,
+    val icon: ImageVector,
+) {
+    Dashboard("Beranda", Icons.Rounded.Bolt),
+    Servers("Server", Icons.Rounded.VpnKey),
+    Settings("Atur", Icons.Rounded.Settings),
+    Logs("Log", Icons.AutoMirrored.Rounded.ReceiptLong),
+}
+
+@Composable
+fun AppRoot(
+    dest: Dest,
+    onDest: (Dest) -> Unit,
+    dashboardToggle: () -> Unit,
+    servers: List<com.nusa.tunnel.core.ServerProfile>,
+    selectedId: String?,
+    pingBusy: Set<String>,
+    onAddServers: (String) -> Int,
+    onSelectServer: (String) -> Unit,
+    onDeleteServer: (String) -> Unit,
+    onPingServer: (com.nusa.tunnel.core.ServerProfile) -> Unit,
+    socksPort: String,
+    onSocksPort: (String) -> Unit,
+    sniffer: Boolean,
+    onSniffer: (Boolean) -> Unit,
+) {
+    Scaffold(
+        containerColor = Aurora1,
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color(0xF2050B16),
+                contentColor = Frost,
+            ) {
+                Dest.entries.forEach { d ->
+                    val selected = dest == d
+                    NavigationBarItem(
+                        selected = selected,
+                        onClick = { onDest(d) },
+                        icon = { Icon(d.icon, d.label) },
+                        label = { Text(d.label, style = MaterialTheme.typography.labelSmall) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Spruce,
+                            selectedTextColor = Spruce,
+                            unselectedIconColor = FrostDim,
+                            unselectedTextColor = FrostDim,
+                            indicatorColor = Color(0x2600C27A),
+                        ),
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            AnimatedContent(
+                targetState = dest,
+                transitionSpec = {
+                    val dir = if (targetState.ordinal >= initialState.ordinal) 1 else -1
+                    (slideInHorizontally(tween(260)) { it / 6 * dir } + fadeIn(tween(260)))
+                        .togetherWith(fadeOut(tween(160)))
+                },
+                label = "screen",
+            ) { d ->
+                when (d) {
+                    Dest.Dashboard -> DashboardScreen(
+                        serverName = servers.firstOrNull { it.id == selectedId }?.remarks ?: "",
+                        onToggle = dashboardToggle,
+                    )
+                    Dest.Servers -> ServersScreen(
+                        servers = servers,
+                        selectedId = selectedId,
+                        pingBusy = pingBusy,
+                        onAdd = onAddServers,
+                        onSelect = onSelectServer,
+                        onDelete = onDeleteServer,
+                        onPing = onPingServer,
+                    )
+                    Dest.Settings -> SettingsScreen(
+                        socksPort = socksPort,
+                        onSocksPort = onSocksPort,
+                        sniffer = sniffer,
+                        onSniffer = onSniffer,
+                    )
+                    Dest.Logs -> LogsScreen()
+                }
+            }
+        }
+    }
+}
