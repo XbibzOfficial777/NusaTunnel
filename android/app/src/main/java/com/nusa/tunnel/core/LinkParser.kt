@@ -1,5 +1,15 @@
 package com.nusa.tunnel.core
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.Base64
 import java.util.UUID
 
@@ -9,8 +19,13 @@ import java.util.UUID
  *  vless://  uuid@host:port?encryption=none&security=tls&sni=&fp=&type=ws&path=&flow=#remarks
  *  trojan:// password@host:port?security=tls&sni=&type=#remarks
  *  ss://     base64(method:password)@host:port#remarks  (atau bentuk lama tanpa @)
+ *
+ * JSON diproses dengan kotlinx.serialization (bukan org.json) supaya
+ * parser berjalan identik di app, unit test JVM, maupun CI.
  */
 object LinkParser {
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun parse(raw: String): ServerProfile? {
         val link = raw.trim()
@@ -18,6 +33,8 @@ object LinkParser {
             when {
                 link.startsWith("vmess://", true) -> parseVmess(link.substring(8))
                 link.startsWith("vless://", true) -> parseVless(link.substring(8))
+                // CATATAN: "trojan://" panjangnya 9 karakter — substring(10)
+                // akan memotong karakter pertama password (bug v2.2.1).
                 link.startsWith("trojan://", true) -> parseTrojan(link.substring(9))
                 link.startsWith("ss://", true) -> parseShadowsocks(link.substring(5))
                 else -> null
@@ -35,116 +52,135 @@ object LinkParser {
      * Mengambil semua outbound vmess/vless/trojan/shadowsocks beserta streamSettings-nya.
      */
     fun parseXrayConfig(jsonText: String): List<ServerProfile> = try {
-        val root = org.json.JSONObject(jsonText)
-        val arr = root.optJSONArray("outbounds") ?: return emptyList()
-        val out = mutableListOf<ServerProfile>()
-        for (i in 0 until arr.length()) {
-            val ob = arr.optJSONObject(i) ?: continue
-            val proto = when (ob.optString("protocol").lowercase()) {
+        val arr = json.parseToJsonElement(jsonText).jsonObject["outbounds"] as? JsonArray
+            ?: return emptyList()
+        arr.mapNotNull { el ->
+            val ob = el as? JsonObject ?: return@mapNotNull null
+            val proto = when ((ob["protocol"] as? JsonPrimitive)?.content?.lowercase()) {
                 "vmess" -> Proto.VMess
                 "vless" -> Proto.VLESS
                 "trojan" -> Proto.Trojan
                 "shadowsocks" -> Proto.Shadowsocks
                 else -> null
-            } ?: continue
-            val p = outboundToProfile(ob, proto) ?: continue
-            out.add(p)
+            } ?: return@mapNotNull null
+            outboundToProfile(ob, proto)
         }
-        out
     } catch (e: Exception) {
         emptyList()
     }
 
-    private fun outboundToProfile(ob: org.json.JSONObject, proto: Proto): ServerProfile? {
-        val s = ob.optJSONObject("settings") ?: return null
-        var host = ""; var port = 0; var secret = ""; var enc = ""
+    private fun JsonObject.str(vararg keys: String): String {
+        for (k in keys) {
+            val v = this[k] as? JsonPrimitive ?: continue
+            return v.contentOrNull ?: ""
+        }
+        return ""
+    }
+
+    private fun JsonObject.int(key: String): Int =
+        (this[key] as? JsonPrimitive)?.intOrNull ?: 0
+
+    private fun JsonObject.bool(key: String): Boolean =
+        (this[key] as? JsonPrimitive)?.booleanOrNull ?: false
+
+    private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
+
+    private fun JsonObject.arr(key: String): JsonArray? = this[key] as? JsonArray
+
+    /** gabung array JSON string jadi satu string dengan pemisah. */
+    private fun JsonArray.joinStr(sep: String): String =
+        mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString(sep)
+
+    private fun outboundToProfile(ob: JsonObject, proto: Proto): ServerProfile? {
+        val s = ob.obj("settings") ?: return null
+        var host = ""; var port = 0; var secret = ""; var enc = ""; var flow = ""
         when (proto) {
             Proto.VMess, Proto.VLESS -> {
-                val vnext = s.optJSONArray("vnext")?.optJSONObject(0) ?: return null
-                val user = vnext.optJSONArray("users")?.optJSONObject(0)
-                host = vnext.optString("address")
-                port = vnext.optInt("port")
-                secret = user?.optString("id") ?: ""
-                enc = user?.optString("security") ?: user?.optString("encryption") ?: ""
+                val vnext = s.arr("vnext")?.get(0) as? JsonObject ?: return null
+                val user = vnext.arr("users")?.get(0) as? JsonObject
+                host = vnext.str("address")
+                port = vnext.int("port")
+                secret = user?.str("id") ?: ""
+                enc = user?.str("security", "encryption") ?: ""
+                flow = user?.str("flow") ?: ""
             }
             Proto.Trojan -> {
-                val srv = s.optJSONArray("servers")?.optJSONObject(0) ?: return null
+                val srv = s.arr("servers")?.get(0) as? JsonObject ?: return null
                 // Xray >= v26: password di level server; versi lama: di users[0]
-                secret = if (srv.has("password")) srv.optString("password")
-                else srv.optJSONArray("users")?.optJSONObject(0)?.optString("password") ?: ""
-                host = srv.optString("address")
-                port = srv.optInt("port")
+                secret = if (srv.containsKey("password")) srv.str("password")
+                else (srv.arr("users")?.get(0) as? JsonObject)?.str("password") ?: ""
+                host = srv.str("address")
+                port = srv.int("port")
             }
             Proto.Shadowsocks -> {
-                val srv = s.optJSONArray("servers")?.optJSONObject(0) ?: return null
-                host = srv.optString("address")
-                port = srv.optInt("port")
-                secret = srv.optString("password")
-                enc = srv.optString("method")
+                val srv = s.arr("servers")?.get(0) as? JsonObject ?: return null
+                host = srv.str("address")
+                port = srv.int("port")
+                secret = srv.str("password")
+                enc = srv.str("method")
             }
         }
         if (host.isBlank() || port !in 1..65535 || secret.isBlank()) return null
 
-        val ss = ob.optJSONObject("streamSettings")
-        val network = ss?.optString("network") ?: "tcp"
-        val security = ss?.optString("security") ?: "none"
+        val ss = ob.obj("streamSettings")
+        val network = ss?.str("network") ?: "tcp"
+        val security = ss?.str("security") ?: "none"
         val tls = security.equals("tls", true) || security.equals("reality", true)
-        val tlsSet = ss?.optJSONObject("tlsSettings")
-        val wsSet = ss?.optJSONObject("wsSettings")
-        val grpcSet = ss?.optJSONObject("grpcSettings")
-        val netSet = ss?.optJSONObject("networkSettings")
+        val tlsSet = ss?.obj("tlsSettings")
+        val wsSet = ss?.obj("wsSettings")
+        val grpcSet = ss?.obj("grpcSettings")
+        val netSet = ss?.obj("networkSettings")
 
         return ServerProfile(
-            id = java.util.UUID.randomUUID().toString(),
+            id = UUID.randomUUID().toString(),
             proto = proto,
-            remarks = ob.optString("tag").ifBlank { "$host:$port" },
+            remarks = ob.str("tag").ifBlank { "$host:$port" },
             host = host, port = port, secret = secret,
             encryption = enc.ifBlank { if (proto == Proto.VMess) "auto" else if (proto == Proto.Shadowsocks) "aes-256-gcm" else "" },
             network = network,
             tls = tls,
-            sni = tlsSet?.optString("serverName") ?: "",
-            alpn = tlsSet?.optJSONArray("alpn")?.join("/") ?: "",
-            fingerprint = tlsSet?.optString("fingerprint") ?: "",
-            flow = s.optJSONArray("vnext")?.optJSONObject(0)
-                ?.optJSONArray("users")?.optJSONObject(0)?.optString("flow") ?: "",
-            wsPath = wsSet?.optString("path") ?: netSet?.optString("path") ?: "/",
-            wsHost = wsSet?.optString("host") ?: netSet?.optString("host") ?: "",
-            grpcServiceName = grpcSet?.optString("serviceName") ?: "",
-            allowInsecure = tlsSet?.optBoolean("allowInsecure") ?: false,
+            sni = tlsSet?.str("serverName") ?: "",
+            alpn = tlsSet?.arr("alpn")?.joinStr("/") ?: "",
+            fingerprint = tlsSet?.str("fingerprint") ?: "",
+            flow = flow,
+            wsPath = wsSet?.str("path") ?: netSet?.str("path") ?: "/",
+            wsHost = wsSet?.str("host") ?: netSet?.str("host") ?: "",
+            grpcServiceName = grpcSet?.str("serviceName") ?: "",
+            allowInsecure = tlsSet?.bool("allowInsecure") ?: false,
         )
     }
 
     // ---------------------------------------------------------- vmess
 
     private fun parseVmess(body: String): ServerProfile? {
-        val json = b64Decode(body) ?: return null
-        val o = org.json.JSONObject(json)
-        val net = o.optString("net", "tcp")
-        val tls = o.optString("tls", "").equals("tls", true)
+        val decoded = b64Decode(body) ?: return null
+        val o = json.parseToJsonElement(decoded).jsonObject
+        val net = o.str("net").ifBlank { "tcp" }
+        val tls = o.str("tls").equals("tls", true)
         return ServerProfile(
             id = UUID.randomUUID().toString(),
             proto = Proto.VMess,
-            remarks = o.optString("ps").ifBlank { "${o.optString("add")}:${o.optString("port")}" },
-            host = o.optString("add"),
-            port = o.optInt("port"),
-            secret = o.optString("id"),
-            encryption = o.optString("scy").ifBlank { "auto" },
+            remarks = o.str("ps").ifBlank { "${o.str("add")}:${o.str("port")}" },
+            host = o.str("add"),
+            port = o.int("port"),
+            secret = o.str("id"),
+            encryption = o.str("scy").ifBlank { "auto" },
             network = net,
             tls = tls,
-            sni = o.optString("sni"),
-            alpn = o.optString("alpn"),
-            fingerprint = o.optString("fp"),
-            wsPath = o.optString("path").ifBlank { "/" },
-            wsHost = o.optString("host"),
-            grpcServiceName = o.optString("path"),
-            allowInsecure = o.optString("allowInsecure").equals("1", true),
+            sni = o.str("sni"),
+            alpn = o.str("alpn"),
+            fingerprint = o.str("fp"),
+            wsPath = o.str("path").ifBlank { "/" },
+            wsHost = o.str("host"),
+            grpcServiceName = o.str("path"),
+            allowInsecure = o.str("allowInsecure").equals("1", true),
         )
     }
 
     // ---------------------------------------------------------- vless / trojan
 
     private fun parseVless(body: String): ServerProfile? =
-        parseUserInfoHost(body, Proto.VLESS)?.let { (secret, host, port, q, remarks) ->
+        parseUserInfoHost(body)?.let { (secret, host, port, q, remarks) ->
             ServerProfile(
                 id = UUID.randomUUID().toString(),
                 proto = Proto.VLESS,
@@ -165,7 +201,7 @@ object LinkParser {
         }
 
     private fun parseTrojan(body: String): ServerProfile? =
-        parseUserInfoHost(body, Proto.Trojan)?.let { (secret, host, port, q, remarks) ->
+        parseUserInfoHost(body)?.let { (secret, host, port, q, remarks) ->
             ServerProfile(
                 id = UUID.randomUUID().toString(),
                 proto = Proto.Trojan,
@@ -184,9 +220,7 @@ object LinkParser {
         }
 
     /** Bentuk umum: secret@host:port?query#fragment */
-    private fun parseUserInfoHost(
-        body: String, @Suppress("UNUSED_PARAMETER") proto: Proto,
-    ): Tuple5? {
+    private fun parseUserInfoHost(body: String): Tuple5? {
         val hashSplit = body.split("#", limit = 2)
         val remarks = if (hashSplit.size == 2) urlDecode(hashSplit[1]) else ""
         val beforeHash = hashSplit[0]
@@ -268,16 +302,6 @@ object LinkParser {
 
     private fun urlDecode(s: String): String =
         java.net.URLDecoder.decode(s, "UTF-8")
-
-    /** Helper: gabung array JSON string jadi satu string dengan pemisah. */
-    private fun org.json.JSONArray.join(sep: String): String {
-        val sb = StringBuilder()
-        for (i in 0 until length()) {
-            if (i > 0) sb.append(sep)
-            sb.append(optString(i))
-        }
-        return sb.toString()
-    }
 
     private fun b64Decode(s: String): String? = b64DecodeFlex(s)
 
