@@ -68,7 +68,6 @@ import com.nusa.tunnel.core.VpnAppRoutingMode
 import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnBehaviorSettings
 import com.nusa.tunnel.ui.components.GlassCard
-import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Danger
 import com.nusa.tunnel.ui.theme.Frost
 import com.nusa.tunnel.ui.theme.FrostDim
@@ -106,11 +105,7 @@ fun SettingsScreen(
     var subPage by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = subPage.isNotEmpty()) { subPage = "" }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(AuroraGradient)
-    ) {
+    Box(Modifier.fillMaxSize()) {
         if (subPage == "per_app") {
             PerAppVpnPage(
                 settings = vpnAppRouting,

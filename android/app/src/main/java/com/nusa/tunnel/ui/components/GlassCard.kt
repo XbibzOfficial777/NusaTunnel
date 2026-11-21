@@ -1,5 +1,8 @@
 package com.nusa.tunnel.ui.components
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -30,6 +33,12 @@ fun GlassCard(
 ) {
     Box(
         modifier = modifier
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            )
             .clip(RoundedCornerShape(corner))
             .background(GlassGradient)
             .border(0.6.dp, GlassStroke, RoundedCornerShape(corner))

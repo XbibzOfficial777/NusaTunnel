@@ -1,10 +1,15 @@
 package com.nusa.tunnel.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.core.ConnectionCheckSettings
@@ -34,6 +40,7 @@ import com.nusa.tunnel.core.UdpTunnelEngine
 import com.nusa.tunnel.core.VpnAppInfo
 import com.nusa.tunnel.core.VpnAppRoutingSettings
 import com.nusa.tunnel.core.VpnBehaviorSettings
+import com.nusa.tunnel.ui.components.AnimatedAuroraBackdrop
 import com.nusa.tunnel.ui.screens.DashboardScreen
 import com.nusa.tunnel.ui.screens.LogsScreen
 import com.nusa.tunnel.ui.screens.ServersScreen
@@ -51,6 +58,23 @@ enum class Dest(
     Servers("Server", Icons.Rounded.VpnKey),
     Settings("Atur", Icons.Rounded.Settings),
     Logs("Log", Icons.AutoMirrored.Rounded.ReceiptLong),
+}
+
+@Composable
+private fun AnimatedNavIcon(icon: ImageVector, label: String, selected: Boolean) {
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.08f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "navigation-icon-scale",
+    )
+    Icon(
+        imageVector = icon,
+        contentDescription = label,
+        modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+    )
 }
 
 @Composable
@@ -109,7 +133,7 @@ fun AppRoot(
                     NavigationBarItem(
                         selected = selected,
                         onClick = { onDest(d) },
-                        icon = { Icon(d.icon, d.label) },
+                        icon = { AnimatedNavIcon(d.icon, d.label, selected) },
                         label = { Text(d.label, style = MaterialTheme.typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Spruce,
@@ -128,12 +152,25 @@ fun AppRoot(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            AnimatedAuroraBackdrop(Modifier.fillMaxSize())
             AnimatedContent(
                 targetState = dest,
                 transitionSpec = {
-                    val dir = if (targetState.ordinal >= initialState.ordinal) 1 else -1
-                    (slideInHorizontally(tween(260)) { it / 6 * dir } + fadeIn(tween(260)))
-                        .togetherWith(fadeOut(tween(160)))
+                    val direction = if (targetState.ordinal >= initialState.ordinal) 1 else -1
+                    val enter = slideInHorizontally(
+                        initialOffsetX = { width -> width / 10 * direction },
+                        animationSpec = spring(
+                            dampingRatio = 0.92f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                    ) + fadeIn(
+                        animationSpec = tween(240, easing = FastOutSlowInEasing),
+                    )
+                    val exit = slideOutHorizontally(
+                        targetOffsetX = { width -> -width / 18 * direction },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    ) + fadeOut(animationSpec = tween(170))
+                    enter.togetherWith(exit)
                 },
                 label = "screen",
             ) { d ->

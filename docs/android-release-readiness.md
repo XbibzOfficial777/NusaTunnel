@@ -47,5 +47,6 @@ Normal Android CI builds may use the debug signing key only to prove that the re
 - The old private key remains present in public Git history. The current tree is being cleaned; history purge/revocation and distribution-channel notice need owner coordination.
 - Existing-install migration/data backup has not been implemented or tested for a signing-key change.
 - The feature ledger is still partial: SSH/HCR, SlowDNS, complete Xray profile/routing editors, OpenVPN, Psiphon, Share Net, response checker, and additional screenshot controls remain incomplete. A green build does not clear those parity blockers.
+- The AndroidX splash-screen handoff, Compose motion polish, and `UiMotionKvmTest` have not yet been assembled or run. Verify them through the remote Android CI and KVM instrumentation workflow before release.
 - Live Xray/VpnService TUN traffic assertions and physical-device behavior remain unverified. No release may claim these are verified.
 - Remote GitHub Actions must pass for the final commit and draft release. Do not build/test the Android app in the local sandbox, and do not push a release tag or publish until all required checks and user-facing migration steps are ready.

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Tunnel-inspired N mark, centered for Android's adaptive system splash mask. -->
+    <path
+        android:fillColor="#07101F"
+        android:pathData="M22,28h14l36,44V28h14v52H72L36,36v44H22z" />
+    <path
+        android:fillColor="#B4E34A"
+        android:pathData="M78,12a5,5 0,1 1 0,10a5,5 0,1 1 0,-10" />
+</vector>

@@ -5,9 +5,11 @@ import android.content.Intent
 import android.net.Uri
 import android.net.VpnService
 import android.os.Bundle
+import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,6 +75,16 @@ class MainActivity : ComponentActivity() {
     private var pendingNav by mutableStateOf<Dest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen().setOnExitAnimationListener { splashView ->
+            splashView.view.animate()
+                .alpha(0f)
+                .scaleX(0.94f)
+                .scaleY(0.94f)
+                .setDuration(240L)
+                .setInterpolator(DecelerateInterpolator())
+                .withEndAction { splashView.remove() }
+                .start()
+        }
         super.onCreate(savedInstanceState)
         store = ServerStore(this)
 

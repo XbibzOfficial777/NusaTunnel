@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.core.TunnelManager
 import com.nusa.tunnel.ui.components.GlassCard
 import com.nusa.tunnel.ui.theme.Aurora0
-import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Frost
 import com.nusa.tunnel.ui.theme.FrostDim
 import com.nusa.tunnel.ui.theme.Mint
@@ -48,11 +47,7 @@ fun LogsScreen() {
         if (logs.isNotEmpty()) listState.animateScrollToItem(logs.lastIndex)
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(AuroraGradient)
-    ) {
+    Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier

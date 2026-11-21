@@ -1,6 +1,11 @@
 package com.nusa.tunnel.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -59,12 +64,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.nusa.tunnel.core.ServerProfile
 import com.nusa.tunnel.ui.components.GlassCard
-import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Danger
 import com.nusa.tunnel.ui.theme.Frost
 import com.nusa.tunnel.ui.theme.FrostDim
@@ -106,11 +111,7 @@ fun ServersScreen(
     }
     val visible = filtered.take(shown)
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(AuroraGradient)
-    ) {
+    Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
 
             // header + pencarian
@@ -271,6 +272,25 @@ private fun ServerRow(
     onDelete: () -> Unit,
     onPing: () -> Unit,
 ) {
+    val indicatorColor by animateColorAsState(
+        targetValue = if (selected) Mint else Color(0x33FFFFFF),
+        animationSpec = tween(240),
+        label = "server-selection-dot-color",
+    )
+    val indicatorScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.82f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "server-selection-dot-scale",
+    )
+    val titleColor by animateColorAsState(
+        targetValue = if (selected) Mint else Frost,
+        animationSpec = tween(240),
+        label = "server-selection-title-color",
+    )
+
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -287,20 +307,16 @@ private fun ServerRow(
             Box(
                 Modifier
                     .size(10.dp)
+                    .graphicsLayer { scaleX = indicatorScale; scaleY = indicatorScale }
                     .clip(CircleShape)
-                    .background(
-                        when {
-                            selected -> Mint
-                            else -> Color(0x33FFFFFF)
-                        }
-                    )
+                    .background(indicatorColor)
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     server.remarks,
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (selected) Mint else Frost,
+                    color = titleColor,
                     maxLines = 1,
                 )
                 Text(
