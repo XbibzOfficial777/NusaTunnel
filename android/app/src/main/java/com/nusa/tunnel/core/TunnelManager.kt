@@ -60,6 +60,14 @@ object TunnelManager {
     @Volatile private var statsJob: Job? = null
     @Volatile private var coreStarted = false
 
+    // queryAllOutboundTrafficStats() returns (and resets) bytes accumulated since
+    // the previous query, so keep a separate per-connection total for the UI.
+    private val trafficTotals = TrafficStatsAccumulator()
+
+    // Serialize stats queries against stopLoop(); the native stats manager can be
+    // torn down while the VPN service is shutting down.
+    private val coreApiLock = Any()
+
     fun log(line: String) {
         Log.d(TAG, line)
         val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
@@ -133,6 +141,7 @@ object TunnelManager {
         ) return
         this.socksPort = socksPort
         currentProfile = profile
+        trafficTotals.reset()
         _status.value = TunnelStatus(
             state = TunnelState.Connecting,
             serverName = profile.remarks,
@@ -147,6 +156,7 @@ object TunnelManager {
     fun disconnect(context: Context) {
         if (_status.value.state == TunnelState.Idle) return
         _status.value = _status.value.copy(state = TunnelState.Disconnecting)
+        stopStatsPolling()
         log("Memutuskan tunnel…")
         context.startService(Intent(context, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_STOP
@@ -185,9 +195,15 @@ object TunnelManager {
         stopStatsPolling()
     }
 
+    /** Hentikan polling sebelum VpnService mulai mematikan native core. */
+    fun onServiceStopping() {
+        stopStatsPolling()
+    }
+
     fun onServiceDestroyed() {
         stopStatsPolling()
         coreStarted = false
+        trafficTotals.reset()
         if (_status.value.state != TunnelState.Error) {
             _status.value = _status.value.copy(
                 state = TunnelState.Idle,
@@ -203,8 +219,10 @@ object TunnelManager {
         statsJob?.cancel()
         statsJob = scope.launch {
             while (isActive) {
-                val stats = readStatsOnce()
-                _status.value = _status.value.copy(upBytes = stats.first, downBytes = stats.second)
+                val delta = readStatsOnce()
+                if (!isActive) break
+                val total = trafficTotals.add(delta.first, delta.second)
+                _status.value = _status.value.copy(upBytes = total.first, downBytes = total.second)
                 delay(1000)
             }
         }
@@ -216,25 +234,45 @@ object TunnelManager {
     }
 
     /**
-     * Baca counter trafik nyata Xray.
+     * Ambil delta counter trafik Xray sejak polling sebelumnya.
+     * queryAllOutboundTrafficStats() me-reset counter setelah dibaca.
      * Format: "tag,direction,value;tag,direction,value;"
      */
     fun readStatsOnce(): Pair<Long, Long> = runCatching {
-        val raw = (TunnelVpnService.coreController as? libv2ray.CoreController)
-            ?.queryAllOutboundTrafficStats() ?: return 0L to 0L
-        var up = 0L; var down = 0L
-        raw.split(";").filter { it.isNotBlank() }.forEach { entry ->
-            val parts = entry.split(",")
-            if (parts.size == 3 && parts[0] == "proxy") {
-                val v = parts[2].toLongOrNull() ?: 0L
-                when (parts[1]) {
-                    "uplink" -> up += v
-                    "downlink" -> down += v
+        synchronized(coreApiLock) {
+            val raw = (TunnelVpnService.coreController as? libv2ray.CoreController)
+                ?.queryAllOutboundTrafficStats().orEmpty()
+            if (raw.isBlank()) {
+                0L to 0L
+            } else {
+                var up = 0L; var down = 0L
+                raw.split(";").filter { it.isNotBlank() }.forEach { entry ->
+                    val parts = entry.split(",")
+                    if (parts.size == 3 && parts[0] == "proxy") {
+                        val v = parts[2].toLongOrNull() ?: 0L
+                        when (parts[1]) {
+                            "uplink" -> up += v
+                            "downlink" -> down += v
+                        }
+                    }
                 }
+                up to down
             }
         }
-        up to down
     }.getOrDefault(0L to 0L)
+
+    /** Dipakai service agar query stats dan stopLoop tidak berjalan bersamaan. */
+    fun stopCoreSafely(controller: libv2ray.CoreController?, clearController: () -> Unit) {
+        synchronized(coreApiLock) {
+            try {
+                controller?.stopLoop()
+            } finally {
+                // Clear sebelum melepas lock agar polling yang sudah dibatalkan
+                // tidak sempat query controller yang baru saja dihentikan.
+                clearController()
+            }
+        }
+    }
 
     /**
      * Ping nyata: bikin config proxy-only lalu HTTP request lewat instance Xray sementara.

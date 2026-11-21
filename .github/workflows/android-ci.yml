@@ -1,0 +1,69 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit, Xray config, and live subscription smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LIBXRAY_VERSION: v26.11.9
+      NUSATUNNEL_SUBSCRIPTION_URL: https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_Sub.txt
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle 9.9.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.9.2'
+
+      - name: Cache engine AAR
+        id: aar-cache
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/libxray.aar
+          key: libv2ray-${{ env.LIBXRAY_VERSION }}
+
+      - name: Download AndroidLibXrayLite AAR
+        if: steps.aar-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/libxray.aar \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
+          test -s android/app/libs/libxray.aar
+
+      - name: Run Kotlin unit tests and live subscription smoke test
+        working-directory: android
+        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Download matching Xray-core binary
+        run: |
+          curl -fL --retry 3 -o /tmp/xray.zip \
+            "https://github.com/XTLS/Xray-core/releases/download/${LIBXRAY_VERSION}/Xray-linux-64.zip"
+          mkdir -p /tmp/xray-bin
+          unzip -o /tmp/xray.zip xray -d /tmp/xray-bin
+          chmod +x /tmp/xray-bin/xray
+          /tmp/xray-bin/xray version
+
+      - name: Validate generated configs with Xray-core
+        run: python3 ci/verify_xray_config.py /tmp/xray-bin/xray

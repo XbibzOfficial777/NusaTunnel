@@ -90,6 +90,10 @@ class TunnelVpnService : VpnService() {
                 .addRoute("::", 0)
                 .addDnsServer("1.1.1.1")
                 .addDnsServer("8.8.8.8")
+                // AndroidLibXrayLite startLoop() tidak menyediakan callback
+                // VpnService.protect(fd). Kecualikan UID NusaTunnel agar koneksi
+                // Xray ke server tidak masuk lagi ke TUN dan membentuk routing loop.
+                .addDisallowedApplication(packageName)
                 .setBlocking(true)
 
             vpnInterface = builder.establish() ?: run {
@@ -113,8 +117,13 @@ class TunnelVpnService : VpnService() {
     private fun startCore(config: String, tunFd: Int) {
         Thread {
             try {
-                // hentikan instance lama bila ada
-                runCatching { coreController?.stopLoop() }
+                // Hentikan instance lama dengan lock yang sama seperti polling stats.
+                TunnelManager.onServiceStopping()
+                coreController?.let { old ->
+                    runCatching {
+                        TunnelManager.stopCoreSafely(old) { coreController = null }
+                    }.onFailure { Log.w(TAG, "stop core lama: ${it.message}") }
+                }
                 val controller = Libv2ray.newCoreController(TunnelManager.coreCallback)
                 controller.startLoop(config, tunFd)
                 coreController = controller
@@ -134,12 +143,15 @@ class TunnelVpnService : VpnService() {
     // ---------------------------------------------------------- stop (NYATA)
 
     private fun stopSelfClean() {
+        // Batalkan polling dulu. stopCoreSafely() juga menunggu query native yang
+        // mungkin sedang berjalan sebelum memanggil stopLoop().
+        TunnelManager.onServiceStopping()
         thread(name = "nusa-stop") {
             // 1. hentikan core Xray — stopLoop mematikan instance Go
             try {
                 coreController?.let { c ->
                     Log.i(TAG, "stopLoop dipanggil…")
-                    c.stopLoop()
+                    TunnelManager.stopCoreSafely(c) { coreController = null }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "stopLoop: ${e.message}")
