@@ -37,6 +37,33 @@ class XrayConfigBuilderTest {
         host = "ss.example.com", port = 8388, secret = "pw",
         encryption = "aes-256-gcm",
     )
+    private val realityKey = "e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg"
+    private val vlessReality = vless.copy(
+        streamSecurity = "reality", realityPublicKey = realityKey,
+        realityShortId = "c39cc7310a", realitySpiderX = "/",
+        sni = "www.google.com", fingerprint = "chrome",
+    )
+    private val trojanReality = trojan.copy(
+        streamSecurity = "reality", realityPublicKey = realityKey,
+        realityShortId = "601e43eb94a28919", sni = "www.microsoft.com",
+        fingerprint = "chrome",
+    )
+    private val vlessXhttpReality = vless.copy(
+        network = "xhttp", streamSecurity = "reality", realityPublicKey = realityKey,
+        realityShortId = "c39cc7310a", sni = "www.google.com", fingerprint = "chrome",
+        wsPath = "/edge", wsHost = "front.example.com", xhttpMode = "stream-up",
+        xhttpExtra = """{"xPaddingBytes":"100-1000","xmux":{"maxConnections":1}}""",
+    )
+    private val vlessHttpUpgrade = vless.copy(
+        network = "httpupgrade", streamSecurity = "tls", sni = "upgrade.example.com",
+        wsPath = "/connect", wsHost = "cdn.example.com",
+    )
+    private val trojanXhttpReality = trojan.copy(
+        network = "xhttp", streamSecurity = "reality", realityPublicKey = realityKey,
+        realityShortId = "601e43eb94a28919", sni = "www.microsoft.com", fingerprint = "chrome",
+        wsPath = "/trojan-edge", wsHost = "front.example.com", xhttpMode = "stream-one",
+        xhttpExtra = """{"scMaxEachPostBytes":"100000-200000","xmux":{"maxConnections":1}}""",
+    )
 
     private fun build(p: ServerProfile): JsonObject =
         Json.parseToJsonElement(XrayConfigBuilder.build(p, 10808)).jsonObject
@@ -135,6 +162,88 @@ class XrayConfigBuilderTest {
         assertEquals("s.example.com", (tls["serverName"] as kotlinx.serialization.json.JsonPrimitive).content)
         val alpn = tls["alpn"] as JsonArray
         assertEquals(listOf("h2", "http/1.1"), alpn.map { (it as kotlinx.serialization.json.JsonPrimitive).content })
+    }
+
+    @Test
+    fun `vless reality - emits realitySettings and never tlsSettings`() {
+        val stream = build(vlessReality)["outbounds"]!!.jsonArray[0].jsonObject
+            ["streamSettings"]!!.jsonObject
+        assertEquals("reality", (stream["security"] as JsonPrimitive).content)
+        assertFalse(stream.containsKey("tlsSettings"))
+        val reality = stream["realitySettings"]!!.jsonObject
+        assertEquals("www.google.com", (reality["serverName"] as JsonPrimitive).content)
+        assertEquals("chrome", (reality["fingerprint"] as JsonPrimitive).content)
+        assertEquals(realityKey, (reality["publicKey"] as JsonPrimitive).content)
+        assertEquals("c39cc7310a", (reality["shortId"] as JsonPrimitive).content)
+        assertEquals("/", (reality["spiderX"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun `trojan reality - emits reality client settings`() {
+        val stream = build(trojanReality)["outbounds"]!!.jsonArray[0].jsonObject
+            ["streamSettings"]!!.jsonObject
+        assertEquals("reality", (stream["security"] as JsonPrimitive).content)
+        assertFalse(stream.containsKey("tlsSettings"))
+        assertEquals(realityKey, (stream["realitySettings"]!!.jsonObject
+            ["publicKey"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun `xhttp reality - emits path host mode and extra JSON`() {
+        val stream = build(vlessXhttpReality)["outbounds"]!!.jsonArray[0].jsonObject
+            ["streamSettings"]!!.jsonObject
+        val xhttp = stream["xhttpSettings"]!!.jsonObject
+        assertEquals("/edge", (xhttp["path"] as JsonPrimitive).content)
+        assertEquals("front.example.com", (xhttp["host"] as JsonPrimitive).content)
+        assertEquals("stream-up", (xhttp["mode"] as JsonPrimitive).content)
+        assertEquals("100-1000", (xhttp["extra"]!!.jsonObject["xPaddingBytes"] as JsonPrimitive).content)
+        assertEquals(1, (xhttp["extra"]!!.jsonObject["xmux"]!!.jsonObject
+            ["maxConnections"] as JsonPrimitive).content.toInt())
+    }
+
+    @Test
+    fun `trojan xhttp reality - emits extra and reality settings together`() {
+        val outbound = build(trojanXhttpReality)["outbounds"]!!.jsonArray[0].jsonObject
+        assertEquals("trojan", (outbound["protocol"] as JsonPrimitive).content)
+        val stream = outbound["streamSettings"]!!.jsonObject
+        assertEquals("reality", (stream["security"] as JsonPrimitive).content)
+        assertFalse(stream.containsKey("tlsSettings"))
+        val xhttp = stream["xhttpSettings"]!!.jsonObject
+        assertEquals("/trojan-edge", (xhttp["path"] as JsonPrimitive).content)
+        assertEquals("stream-one", (xhttp["mode"] as JsonPrimitive).content)
+        assertEquals("100000-200000", (xhttp["extra"]!!.jsonObject
+            ["scMaxEachPostBytes"] as JsonPrimitive).content)
+        assertEquals(realityKey, (stream["realitySettings"]!!.jsonObject
+            ["publicKey"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun `httpupgrade - emits its transport settings`() {
+        val stream = build(vlessHttpUpgrade)["outbounds"]!!.jsonArray[0].jsonObject
+            ["streamSettings"]!!.jsonObject
+        assertEquals("/connect", (stream["httpupgradeSettings"]!!.jsonObject
+            ["path"] as JsonPrimitive).content)
+        assertEquals("cdn.example.com", (stream["httpupgradeSettings"]!!.jsonObject
+            ["host"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun `Hev mode config omits TUN inbound and applies log level`() {
+        val root = Json.parseToJsonElement(
+            XrayConfigBuilder.build(vmess, 10999, includeTunInbound = false, logLevel = "debug")
+        ).jsonObject
+        val inbounds = root["inbounds"]!!.jsonArray
+        assertEquals(1, inbounds.size)
+        assertEquals("socks", (inbounds.single().jsonObject["tag"] as JsonPrimitive).content)
+        assertEquals("debug", (root["log"]!!.jsonObject["loglevel"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun `invalid Xray log level safely falls back to warning`() {
+        val root = Json.parseToJsonElement(
+            XrayConfigBuilder.build(vmess, 10808, logLevel = "not-a-level")
+        ).jsonObject
+        assertEquals("warning", (root["log"]!!.jsonObject["loglevel"] as JsonPrimitive).content)
     }
 
     @Test

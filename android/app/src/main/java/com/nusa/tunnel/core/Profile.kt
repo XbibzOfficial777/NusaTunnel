@@ -20,14 +20,23 @@ data class ServerProfile(
     val secret: String,
     /* vmess: auto/none; ss: cipher (aes-256-gcm dst) */
     val encryption: String = "",
-    val network: String = "tcp",           // tcp | ws | grpc
+    val network: String = "tcp",           // tcp | ws | grpc | httpupgrade | xhttp/splithttp
     val tls: Boolean = false,
+    /** none | tls | reality; blank preserves legacy profiles and derives from tls. */
+    val streamSecurity: String = "",
+    val realityPublicKey: String = "",     // REALITY pbk
+    val realityShortId: String = "",       // REALITY sid
+    val realitySpiderX: String = "",        // REALITY spx
     val sni: String = "",
     val alpn: String = "",
-    val fingerprint: String = "",          // utls: chrome / firefox / ios dst
+    val fingerprint: String = "",          // uTLS: chrome / firefox / ios dst
     val flow: String = "",                 // vless: xtls-rprx-vision dst
+    /** Shared path/host fields used by WS, HTTPUpgrade, and XHTTP transports. */
     val wsPath: String = "/",
     val wsHost: String = "",
+    val xhttpMode: String = "",
+    /** Raw JSON object from VLESS/Trojan URL extra=; empty when absent/invalid. */
+    val xhttpExtra: String = "",
     val grpcServiceName: String = "",
     val serviceName: String = "",
     val allowInsecure: Boolean = false,

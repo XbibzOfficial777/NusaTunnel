@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       LIBXRAY_VERSION: v26.11.9
+      HEV_VERSION: 2.18.0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,6 +50,23 @@ jobs:
           mkdir -p android/app/libs
           curl -fL --retry 3 -o android/app/libs/libxray.aar \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
+
+      - name: Cache HevSocks5Tunnel AAR
+        id: hev-aar-cache-test
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/hev-socks5-tunnel.aar
+          key: hev-socks5-tunnel-${{ env.HEV_VERSION }}
+
+      - name: Download HevSocks5Tunnel AAR
+        if: steps.hev-aar-cache-test.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/hev-socks5-tunnel.aar \
+            "https://github.com/heiher/hev-socks5-tunnel/releases/download/${HEV_VERSION}/hev-socks5-tunnel.aar"
+
+      - name: Verify HevSocks5Tunnel AAR checksum
+        run: echo "15ec8ed121663b562c99caa5bb602d1009f24e5b09e733438b81988f12feaaab  android/app/libs/hev-socks5-tunnel.aar" | sha256sum -c -
 
       # ---- 1. Unit test JVM (LinkParser / XrayConfigBuilder / SmartImporter)
       - name: Unit test Kotlin (JVM)
@@ -83,6 +101,7 @@ jobs:
     env:
       # Versi engine Xray (AndroidLibXrayLite) — harus cocok dengan kode app
       LIBXRAY_VERSION: v26.11.9
+      HEV_VERSION: 2.18.0
 
     steps:
       - name: Checkout
@@ -114,6 +133,23 @@ jobs:
           curl -fL --retry 3 -o android/app/libs/libxray.aar \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
           ls -la android/app/libs/
+
+      - name: Cache HevSocks5Tunnel AAR
+        id: hev-aar-cache
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/hev-socks5-tunnel.aar
+          key: hev-socks5-tunnel-${{ env.HEV_VERSION }}
+
+      - name: Download HevSocks5Tunnel AAR
+        if: steps.hev-aar-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/hev-socks5-tunnel.aar \
+            "https://github.com/heiher/hev-socks5-tunnel/releases/download/${HEV_VERSION}/hev-socks5-tunnel.aar"
+
+      - name: Verify HevSocks5Tunnel AAR checksum
+        run: echo "15ec8ed121663b562c99caa5bb602d1009f24e5b09e733438b81988f12feaaab  android/app/libs/hev-socks5-tunnel.aar" | sha256sum -c -
 
       # Keystore rilis: pakai secret ANDROID_KEYSTORE_BASE64 bila ada (lebih aman),
       # jika tidak ada pakai keystore yang di-commit di repo.

@@ -4,8 +4,9 @@ Klien tunneling **VMess / VLESS / Trojan / Shadowsocks** lintas platform oleh **
 
 Backend inti memakai **Xray-core resmi (XTLS)** — bukan implementasi tiruan. Desktop berjalan di
 shell **Electron 31** dengan renderer **React 19 + TypeScript** (workbench ala VSCode, liquid glass),
-backend logika **Python stdlib murni**. Versi Android (Kotlin + Jetpack Compose) sedang dikembangkan
-di folder `android/`.
+backend logika **Python stdlib murni**. Versi Android (Kotlin + Jetpack Compose) berada di folder
+`android/`; dukungan protokol dan fitur Android dicatat terpisah dari desktop di
+[`docs/android-support-matrix.md`](docs/android-support-matrix.md).
 
 ## Fitur
 
@@ -27,7 +28,7 @@ Semua installer ada di tab **Releases**:
 | Windows 10/11 (x64) | `NusaTunnel-<versi>-Windows-x64.zip` |
 | macOS Apple Silicon | `NusaTunnel-<versi>-macOS-AppleSilicon.zip` |
 | macOS Intel | `NusaTunnel-<versi>-macOS-Intel.zip` |
-| Android (universal, 4 ABI) | `NusaTunnel-2.2.0-android-universal.apk` |
+| Android (universal, 4 ABI) | `NusaTunnel-v2.2.3-universal.apk` |
 
 ## Struktur repo
 

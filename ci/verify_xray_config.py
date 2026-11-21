@@ -24,8 +24,9 @@ SOCKS_PORT = 10808
 
 
 def profile_base():
-    return dict(encryption="", network="tcp", tls=False, sni="", alpn="",
-                fingerprint="", flow="", wsPath="/", wsHost="",
+    return dict(encryption="", network="tcp", tls=False, security="", sni="", alpn="",
+                fingerprint="", realityPublicKey="", realityShortId="", realitySpiderX="",
+                flow="", wsPath="/", wsHost="", xhttpMode="", xhttpExtra={},
                 grpcServiceName="", allowInsecure=False)
 
 
@@ -41,8 +42,33 @@ def stream_settings(p):
             s["wsSettings"]["host"] = p["wsHost"]
     elif p["network"] == "grpc":
         s["grpcSettings"] = {"serviceName": p["grpcServiceName"], "multiMode": False}
-    s["security"] = "tls" if p["tls"] else "none"
-    if p["tls"]:
+    elif p["network"] == "httpupgrade":
+        s["httpupgradeSettings"] = {"path": p["wsPath"] or "/"}
+        if p["wsHost"]:
+            s["httpupgradeSettings"]["host"] = p["wsHost"]
+    elif p["network"] in ("xhttp", "splithttp"):
+        s["xhttpSettings"] = {"path": p["wsPath"] or "/"}
+        if p["wsHost"]:
+            s["xhttpSettings"]["host"] = p["wsHost"]
+        if p["xhttpMode"]:
+            s["xhttpSettings"]["mode"] = p["xhttpMode"]
+        if p["xhttpExtra"]:
+            s["xhttpSettings"]["extra"] = p["xhttpExtra"]
+    security = p["security"] or ("tls" if p["tls"] else "none")
+    s["security"] = security
+    if security == "reality":
+        reality = {
+            "serverName": p["sni"] or p["host"],
+            "fingerprint": p["fingerprint"] or "chrome",
+        }
+        if p["realityPublicKey"]:
+            reality["publicKey"] = p["realityPublicKey"]
+        if p["realityShortId"]:
+            reality["shortId"] = p["realityShortId"]
+        if p["realitySpiderX"]:
+            reality["spiderX"] = p["realitySpiderX"]
+        s["realitySettings"] = reality
+    elif security == "tls":
         tls = {"serverName": p["sni"] or p["host"], "allowInsecure": p["allowInsecure"]}
         if p["alpn"]:
             tls["alpn"] = [a.strip() for a in p["alpn"].split(",")]
@@ -76,16 +102,20 @@ def outbound(p):
     }
 
 
-def build_config(p):
-    """Replika persis XrayConfigBuilder.build()."""
-    inbounds = [
-        {"tag": "tun", "protocol": "tun",
-         "settings": {"name": "nusatun0", "MTU": 1500, "userLevel": 8},
-         "sniffing": sniffing()},
-        {"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks",
+def build_config(p, include_tun=True, socks_port=SOCKS_PORT):
+    """Replika persis XrayConfigBuilder.build(), including its Hev SOCKS-only mode."""
+    inbounds = []
+    if include_tun:
+        inbounds.append(
+            {"tag": "tun", "protocol": "tun",
+             "settings": {"name": "nusatun0", "MTU": 1500, "userLevel": 8},
+             "sniffing": sniffing()}
+        )
+    inbounds.append(
+        {"tag": "socks", "port": socks_port, "listen": "127.0.0.1", "protocol": "socks",
          "settings": {"auth": "noauth", "udp": True, "userLevel": 8},
-         "sniffing": sniffing()},
-    ]
+         "sniffing": sniffing()}
+    )
     outbounds = [outbound(p),
                  {"tag": "direct", "protocol": "freedom"},
                  {"tag": "block", "protocol": "blackhole"}]
@@ -132,6 +162,41 @@ CASES = [
                      host="ss2.example.com", port=8389,
                      secret=base64.b64encode(secrets.token_bytes(16)).decode(),
                      encryption="2022-blake3-aes-128-gcm")),
+    ("vless_reality", dict(profile_base(), proto="vless", remarks="vless-reality",
+                           host="reality.example.com", port=443, secret="uuid-reality",
+                           security="reality", tls=True, sni="www.google.com",
+                           fingerprint="chrome",
+                           realityPublicKey="e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+                           realityShortId="c39cc7310a", realitySpiderX="/",
+                           flow="xtls-rprx-vision")),
+    ("trojan_reality", dict(profile_base(), proto="trojan", remarks="trojan-reality",
+                            host="trojan-reality.example.com", port=443,
+                            secret="reality-password", security="reality", tls=True,
+                            sni="www.microsoft.com", fingerprint="chrome",
+                            realityPublicKey="e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+                            realityShortId="601e43eb94a28919")),
+    ("vless_xhttp_reality_extra", dict(profile_base(), proto="vless", remarks="vless-xhttp",
+                                       host="xhttp.example.com", port=443, secret="uuid-xhttp",
+                                       network="xhttp", security="reality", tls=True,
+                                       sni="www.google.com", fingerprint="chrome",
+                                       realityPublicKey="e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+                                       realityShortId="c39cc7310a", wsPath="/edge",
+                                       wsHost="front.example.com", xhttpMode="stream-up",
+                                       xhttpExtra={"xPaddingBytes": "100-1000", "xmux": {"maxConnections": 1}})),
+    ("vless_httpupgrade_tls", dict(profile_base(), proto="vless", remarks="vless-httpupgrade",
+                                   host="upgrade.example.com", port=443, secret="uuid-upgrade",
+                                   network="httpupgrade", tls=True, sni="upgrade.example.com",
+                                   wsPath="/connect", wsHost="cdn.example.com")),
+    ("trojan_xhttp_reality_extra", dict(profile_base(), proto="trojan", remarks="trojan-xhttp",
+                                        host="trojan-xhttp.example.com", port=443,
+                                        secret="xhttp-password", network="xhttp", tls=True,
+                                        security="reality", sni="www.microsoft.com",
+                                        fingerprint="chrome",
+                                        realityPublicKey="e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+                                        realityShortId="601e43eb94a28919", wsPath="/trojan-edge",
+                                        wsHost="front.example.com", xhttpMode="stream-one",
+                                        xhttpExtra={"scMaxEachPostBytes": "100000-200000",
+                                                    "xmux": {"maxConnections": 1}})),
 ]
 
 # kunci XUDP valid & tidak valid (regression test bug v2.2.1)
@@ -170,6 +235,15 @@ def main():
         print(f"  [{status}] {name}")
         if not ok:
             failures.append((name, out))
+
+    # HevSocks5Tunnel consumes the VPN fd; its Xray process must expose only SOCKS.
+    hev_socks_only = build_config(CASES[0][1], include_tun=False, socks_port=10999)
+    ok, out = run_xray_test(hev_socks_only)
+    print(f"  [{'LOLOS' if ok else 'GAGAL'}] hev_socks_only")
+    if not ok:
+        failures.append(("hev_socks_only", out))
+    if any(inbound.get("protocol") == "tun" for inbound in hev_socks_only["inbounds"]):
+        failures.append(("hev_socks_only-has-tun", "Hev mode config must not include Xray TUN inbound"))
 
     # --- 2. Regression: bug lapangan v2.2.0 (outboundTag/port array) ---
     print("== 2. Regression bug lama HARUS ditolak ==")

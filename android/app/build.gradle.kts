@@ -14,8 +14,8 @@ android {
         applicationId = "com.nusa.tunnel"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "2.2.2"
+        versionCode = 4
+        versionName = "2.2.3"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -78,8 +78,10 @@ kotlin {
 }
 
 dependencies {
-    // Engine tunnel nyata (Xray-core, gobind)
+    // Engine Xray-core (gobind) plus optional default TUN packet processor HevSocks5Tunnel.
+    // CI downloads both pinned AARs into libs/ before the Android build.
     implementation(files("libs/libxray.aar"))
+    implementation(files("libs/hev-socks5-tunnel.aar"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

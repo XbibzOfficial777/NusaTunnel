@@ -14,17 +14,27 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.nusa.tunnel.core.EngineLogLevel
 import com.nusa.tunnel.core.LinkParser
 import com.nusa.tunnel.core.ServerStore
 import com.nusa.tunnel.core.SmartImporter
 import com.nusa.tunnel.core.SubscriptionManager
 import com.nusa.tunnel.core.TunnelManager
+import com.nusa.tunnel.core.TunnelSettings
 import com.nusa.tunnel.core.TunnelState
+import com.nusa.tunnel.core.UdpTunnelEngine
 import com.nusa.tunnel.ui.AppRoot
 import com.nusa.tunnel.ui.Dest
 import com.nusa.tunnel.ui.theme.NusaTunnelTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -35,6 +45,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var store: ServerStore
+    private var pendingSocksPort = 10808
 
     /** Navigasi tertunda dari intent import (state agar memicu recomposisi). */
     private var pendingNav by mutableStateOf<Dest?>(null)
@@ -64,8 +75,39 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf("10808")
                 }
                 var sniffer by androidx.compose.runtime.remember { mutableStateOf(true) }
+                var udpEngine by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.udpTunnelEngine(this@MainActivity))
+                }
+                var logLevel by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.logLevel(this@MainActivity))
+                }
+                var autoPing by androidx.compose.runtime.remember {
+                    mutableStateOf(TunnelSettings.autoPingEnabled(this@MainActivity))
+                }
                 var subBusy by androidx.compose.runtime.remember { mutableStateOf(false) }
                 var importBusy by androidx.compose.runtime.remember { mutableStateOf(false) }
+
+                val latestServers by rememberUpdatedState(servers)
+                val latestTunnelState by rememberUpdatedState(status.state)
+                val lifecycleOwner = LocalLifecycleOwner.current
+                LaunchedEffect(autoPing, selectedId, lifecycleOwner) {
+                    if (!autoPing) return@LaunchedEffect
+                    lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        while (isActive) {
+                            val profile = latestServers.firstOrNull { it.id == selectedId }
+                            if (profile != null && latestTunnelState == TunnelState.Idle) {
+                                val ms = withContext(Dispatchers.IO) {
+                                    TunnelManager.measureLatency(profile)
+                                }
+                                store.updateLatency(profile.id, ms)
+                                TunnelManager.log(
+                                    "Auto-ping ${profile.remarks}: ${if (ms >= 0) "$ms ms" else "gagal"}"
+                                )
+                            }
+                            delay(5 * 60 * 1000L)
+                        }
+                    }
+                }
 
                 // jalankan navigasi tertunda dari intent
                 pendingNav?.let { dest = it; pendingNav = null }
@@ -121,7 +163,9 @@ class MainActivity : ComponentActivity() {
                     onPingServer = { p ->
                         pingBusy = pingBusy + p.id
                         scope.launch {
-                            val ms = TunnelManager.measureLatency(p)
+                            val ms = withContext(Dispatchers.IO) {
+                                TunnelManager.measureLatency(p)
+                            }
                             store.updateLatency(p.id, ms)
                             TunnelManager.log("Ping ${p.remarks}: ${if (ms >= 0) "$ms ms" else "gagal"}")
                             pingBusy = pingBusy - p.id
@@ -131,6 +175,21 @@ class MainActivity : ComponentActivity() {
                     onSocksPort = { socksPort = it },
                     sniffer = sniffer,
                     onSniffer = { sniffer = it },
+                    udpEngine = udpEngine,
+                    onUdpEngine = {
+                        udpEngine = it
+                        TunnelSettings.setUdpTunnelEngine(this@MainActivity, it)
+                    },
+                    logLevel = logLevel,
+                    onLogLevel = {
+                        logLevel = it
+                        TunnelSettings.setLogLevel(this@MainActivity, it)
+                    },
+                    autoPing = autoPing,
+                    onAutoPing = {
+                        autoPing = it
+                        TunnelSettings.setAutoPingEnabled(this@MainActivity, it)
+                    },
                     subUrl = subUrl ?: "",
                     onSubUrl = { url -> scope.launch { store.setSubscription(url.ifBlank { null }) } },
                     subAuto = subAuto,
@@ -238,12 +297,13 @@ class MainActivity : ComponentActivity() {
     // ---------------------------------------------------------- vpn
 
     private fun prepareVpnThenConnect(profile: com.nusa.tunnel.core.ServerProfile, port: Int) {
+        pendingSocksPort = port.takeIf { it in 1..65535 } ?: 10808
         val intent = VpnService.prepare(this)
         if (intent != null) {
             @Suppress("DEPRECATION")
             startActivityForResult(intent, REQ_VPN)
         } else {
-            TunnelManager.connect(this, profile, port)
+            TunnelManager.connect(this, profile, pendingSocksPort)
         }
     }
 
@@ -254,7 +314,7 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 val profile = store.selected() ?: return@launch
                 if (resultCode == Activity.RESULT_OK) {
-                    TunnelManager.connect(this@MainActivity, profile, 10808)
+                    TunnelManager.connect(this@MainActivity, profile, pendingSocksPort)
                 } else {
                     TunnelManager.log("Izin VPN ditolak pengguna")
                 }

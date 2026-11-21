@@ -16,8 +16,8 @@ import java.util.UUID
 /**
  * Parser link server — format nyata yang dipakai dunia nyata:
  *  vmess://  (base64 JSON v2rayN: v/ps/add/port/id/aid/scy/net/type/host/path/tls/sni/alpn/fp)
- *  vless://  uuid@host:port?encryption=none&security=tls&sni=&fp=&type=ws&path=&flow=#remarks
- *  trojan:// password@host:port?security=tls&sni=&type=#remarks
+ *  vless://  uuid@host:port?security=tls|reality&type=ws|grpc|httpupgrade|xhttp&path=&flow=#remarks
+ *  trojan:// password@host:port?security=tls|reality&type=tcp|ws|grpc|httpupgrade|xhttp#remarks
  *  ss://     base64(method:password)@host:port#remarks  (atau bentuk lama tanpa @)
  *
  * JSON diproses dengan kotlinx.serialization (bukan org.json) supaya
@@ -127,9 +127,16 @@ object LinkParser {
         val security = ss?.str("security") ?: "none"
         val tls = security.equals("tls", true) || security.equals("reality", true)
         val tlsSet = ss?.obj("tlsSettings")
+        val realitySet = ss?.obj("realitySettings")
         val wsSet = ss?.obj("wsSettings")
+        val httpUpgradeSet = ss?.obj("httpupgradeSettings")
+        val httpSet = ss?.obj("httpSettings")
+        val xhttpSet = ss?.obj("xhttpSettings") ?: ss?.obj("splithttpSettings")
         val grpcSet = ss?.obj("grpcSettings")
         val netSet = ss?.obj("networkSettings")
+        val realityPublicKey = realitySet?.str("publicKey", "password") ?: ""
+        val realityShortId = realitySet?.str("shortId") ?: ""
+        if (security.equals("reality", true) && !isValidReality(realityPublicKey, realityShortId)) return null
 
         return ServerProfile(
             id = UUID.randomUUID().toString(),
@@ -139,12 +146,22 @@ object LinkParser {
             encryption = enc.ifBlank { if (proto == Proto.VMess) "auto" else if (proto == Proto.Shadowsocks) "aes-256-gcm" else "" },
             network = network,
             tls = tls,
-            sni = tlsSet?.str("serverName") ?: "",
-            alpn = tlsSet?.arr("alpn")?.joinStr("/") ?: "",
-            fingerprint = tlsSet?.str("fingerprint") ?: "",
+            streamSecurity = security,
+            realityPublicKey = realityPublicKey,
+            realityShortId = realityShortId,
+            realitySpiderX = realitySet?.str("spiderX") ?: "",
+            sni = tlsSet?.str("serverName") ?: realitySet?.str("serverName") ?: "",
+            alpn = tlsSet?.arr("alpn")?.joinStr(",") ?: "",
+            fingerprint = tlsSet?.str("fingerprint") ?: realitySet?.str("fingerprint") ?: "",
             flow = flow,
-            wsPath = wsSet?.str("path") ?: netSet?.str("path") ?: "/",
-            wsHost = wsSet?.str("host") ?: netSet?.str("host") ?: "",
+            wsPath = wsSet?.str("path") ?: httpUpgradeSet?.str("path") ?: xhttpSet?.str("path")
+                ?: httpSet?.str("path") ?: netSet?.str("path") ?: "/",
+            wsHost = wsSet?.str("host") ?: httpUpgradeSet?.str("host") ?: xhttpSet?.str("host")
+                ?: httpSet?.arr("host")?.joinStr(",") ?: netSet?.str("host") ?: "",
+            xhttpMode = xhttpSet?.str("mode").orEmpty().ifBlank {
+                xhttpSet?.obj("extra")?.str("mode") ?: ""
+            },
+            xhttpExtra = xhttpSet?.obj("extra")?.toString() ?: "",
             grpcServiceName = grpcSet?.str("serviceName") ?: "",
             allowInsecure = tlsSet?.bool("allowInsecure") ?: false,
         )
@@ -167,6 +184,7 @@ object LinkParser {
             encryption = o.str("scy").ifBlank { "auto" },
             network = net,
             tls = tls,
+            streamSecurity = if (tls) "tls" else "none",
             sni = o.str("sni"),
             alpn = o.str("alpn"),
             fingerprint = o.str("fp"),
@@ -181,43 +199,101 @@ object LinkParser {
 
     private fun parseVless(body: String): ServerProfile? =
         parseUserInfoHost(body)?.let { (secret, host, port, q, remarks) ->
+            val security = q["security"] ?: "none"
+            val realityPublicKey = q["pbk"] ?: q["publicKey"] ?: ""
+            val realityShortId = q["sid"] ?: q["shortId"] ?: ""
+            if (security.equals("reality", true) && !isValidReality(realityPublicKey, realityShortId)) {
+                return@let null
+            }
             ServerProfile(
                 id = UUID.randomUUID().toString(),
                 proto = Proto.VLESS,
                 remarks = remarks.ifBlank { "$host:$port" },
                 host = host, port = port, secret = secret,
                 encryption = "none",
-                network = q["type"] ?: "tcp",
-                tls = (q["security"] ?: "").equals("tls", true) || (q["security"] ?: "").equals("reality", true),
+                network = normalizeNetwork(q["type"] ?: "tcp"),
+                tls = security.equals("tls", true) || security.equals("reality", true),
+                streamSecurity = security,
+                realityPublicKey = realityPublicKey,
+                realityShortId = realityShortId,
+                realitySpiderX = q["spx"] ?: q["spiderX"] ?: "",
                 sni = q["sni"] ?: "",
                 alpn = q["alpn"] ?: "",
                 fingerprint = q["fp"] ?: "",
                 flow = q["flow"] ?: "",
-                wsPath = (q["path"] ?: "/"),
+                wsPath = q["path"] ?: "/",
                 wsHost = q["host"] ?: "",
+                xhttpMode = parseXhttpMode(q["mode"], q["extra"]),
+                xhttpExtra = parseJsonObject(q["extra"]),
                 grpcServiceName = q["serviceName"] ?: "",
-                allowInsecure = q["allowInsecure"].equals("1", true),
+                allowInsecure = isTruthy(q["allowInsecure"] ?: q["allowinsecure"] ?: q["insecure"]),
             )
         }
 
     private fun parseTrojan(body: String): ServerProfile? =
         parseUserInfoHost(body)?.let { (secret, host, port, q, remarks) ->
+            val security = q["security"] ?: "tls"
+            val realityPublicKey = q["pbk"] ?: q["publicKey"] ?: ""
+            val realityShortId = q["sid"] ?: q["shortId"] ?: ""
+            if (security.equals("reality", true) && !isValidReality(realityPublicKey, realityShortId)) {
+                return@let null
+            }
             ServerProfile(
                 id = UUID.randomUUID().toString(),
                 proto = Proto.Trojan,
                 remarks = remarks.ifBlank { "$host:$port" },
                 host = host, port = port, secret = secret,
-                network = q["type"] ?: "tcp",
-                tls = true, // trojan selalu TLS
+                network = normalizeNetwork(q["type"] ?: "tcp"),
+                tls = security.equals("tls", true) || security.equals("reality", true),
+                streamSecurity = security,
+                realityPublicKey = realityPublicKey,
+                realityShortId = realityShortId,
+                realitySpiderX = q["spx"] ?: q["spiderX"] ?: "",
                 sni = q["sni"] ?: "",
                 alpn = q["alpn"] ?: "",
                 fingerprint = q["fp"] ?: "",
-                wsPath = (q["path"] ?: "/"),
+                wsPath = q["path"] ?: "/",
                 wsHost = q["host"] ?: "",
+                xhttpMode = parseXhttpMode(q["mode"], q["extra"]),
+                xhttpExtra = parseJsonObject(q["extra"]),
                 grpcServiceName = q["serviceName"] ?: "",
-                allowInsecure = q["allowInsecure"].equals("1", true),
+                allowInsecure = isTruthy(q["allowInsecure"] ?: q["allowinsecure"] ?: q["insecure"]),
             )
         }
+
+    private fun normalizeNetwork(value: String): String =
+        if (value.startsWith("tcp@", ignoreCase = true)) "tcp" else value.lowercase()
+
+    private fun isValidReality(publicKey: String, shortId: String): Boolean {
+        val keyBytes = runCatching {
+            Base64.getDecoder().decode(publicKey.replace('-', '+').replace('_', '/'))
+        }.getOrNull()
+        val validShortId = shortId.length <= 16 && shortId.length % 2 == 0 && shortId.all {
+            it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F'
+        }
+        return keyBytes?.size == 32 && validShortId
+    }
+
+    private fun parseJsonObject(value: String?): String {
+        if (value.isNullOrBlank()) return ""
+        return runCatching {
+            (json.parseToJsonElement(value) as? JsonObject)?.toString().orEmpty()
+        }.getOrDefault("")
+    }
+
+    private fun parseXhttpMode(mode: String?, extra: String?): String {
+        if (!mode.isNullOrBlank()) return mode
+        val extraObject = parseJsonObject(extra)
+        if (extraObject.isBlank()) return ""
+        return runCatching {
+            json.parseToJsonElement(extraObject).jsonObject.str("mode")
+        }.getOrDefault("")
+    }
+
+    private fun isTruthy(value: String?): Boolean = when (value?.trim()?.lowercase()) {
+        "1", "true", "yes", "on" -> true
+        else -> false
+    }
 
     /** Bentuk umum: secret@host:port?query#fragment */
     private fun parseUserInfoHost(body: String): Tuple5? {

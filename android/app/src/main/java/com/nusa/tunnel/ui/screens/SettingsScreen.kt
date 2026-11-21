@@ -19,8 +19,12 @@ import androidx.compose.material.icons.rounded.Engineering
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -36,6 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.UdpTunnelEngine
 import com.nusa.tunnel.ui.components.GlassCard
 import com.nusa.tunnel.ui.theme.AuroraGradient
 import com.nusa.tunnel.ui.theme.Frost
@@ -50,6 +56,12 @@ fun SettingsScreen(
     onSocksPort: (String) -> Unit,
     sniffer: Boolean,
     onSniffer: (Boolean) -> Unit,
+    udpEngine: UdpTunnelEngine,
+    onUdpEngine: (UdpTunnelEngine) -> Unit,
+    logLevel: EngineLogLevel,
+    onLogLevel: (EngineLogLevel) -> Unit,
+    autoPing: Boolean,
+    onAutoPing: (Boolean) -> Unit,
 ) {
     Box(
         Modifier
@@ -127,6 +139,58 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(12.dp))
 
+            // ---- tunnel engine, diagnostics, and opt-in ping ----
+            GlassCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("Engine UDP", style = MaterialTheme.typography.titleMedium, color = Frost)
+                    Spacer(Modifier.height(8.dp))
+                    SettingsChoice(
+                        selected = udpEngine.label,
+                        options = UdpTunnelEngine.entries,
+                        label = { it.label },
+                        onSelected = onUdpEngine,
+                    )
+                    Text(
+                        "HevSocks5Tunnel is the default TUN-to-SOCKS5 packet engine. Xray native TUN is available as a manual fallback; selection applies on the next connection.",
+                        style = MaterialTheme.typography.bodySmall, color = FrostDim,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Text("Log detail", style = MaterialTheme.typography.titleSmall, color = Frost)
+                    Spacer(Modifier.height(6.dp))
+                    SettingsChoice(
+                        selected = logLevel.label,
+                        options = EngineLogLevel.entries,
+                        label = { it.label },
+                        onSelected = onLogLevel,
+                    )
+                    Text(
+                        "Verbose maps to engine debug logs. Higher detail can increase log volume; warning is the default.",
+                        style = MaterialTheme.typography.bodySmall, color = FrostDim,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Auto-ping server terpilih", style = MaterialTheme.typography.titleSmall, color = Frost)
+                            Text(
+                                "Ping tiap 5 menit hanya saat aplikasi di depan dan tunnel terputus. Nonaktif secara default agar tidak menambah trafik idle.",
+                                style = MaterialTheme.typography.bodySmall, color = FrostDim,
+                            )
+                        }
+                        Switch(
+                            checked = autoPing,
+                            onCheckedChange = onAutoPing,
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = Spruce,
+                                checkedThumbColor = Frost,
+                                uncheckedTrackColor = Color(0x33FFFFFF),
+                                uncheckedThumbColor = FrostDim,
+                            ),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+
             // ---- info engine ----
             GlassCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp)) {
@@ -136,7 +200,7 @@ fun SettingsScreen(
                         Text("Engine", style = MaterialTheme.typography.titleMedium, color = Frost)
                     }
                     Spacer(Modifier.height(10.dp))
-                    InfoRow("Versi aplikasi", "2.2.0 (1)")
+                    InfoRow("Versi aplikasi", "2.2.3 (4)")
                     InfoRow("Engine", com.nusa.tunnel.core.TunnelManager.engineVersion())
                     InfoRow("Mode", "VPN (TUN seluruh sistem)")
                     InfoRow("MTU", "1500")
@@ -161,6 +225,39 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun <T> SettingsChoice(
+    selected: String,
+    options: List<T>,
+    label: (T) -> String,
+    onSelected: (T) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
+        ) {
+            Text(selected, modifier = Modifier.fillMaxWidth())
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(label(option)) },
+                    onClick = {
+                        expanded = false
+                        onSelected(option)
+                    },
+                )
+            }
         }
     }
 }

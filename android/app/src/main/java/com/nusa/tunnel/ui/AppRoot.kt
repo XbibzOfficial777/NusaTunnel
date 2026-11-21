@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.nusa.tunnel.core.EngineLogLevel
+import com.nusa.tunnel.core.UdpTunnelEngine
 import com.nusa.tunnel.ui.screens.DashboardScreen
 import com.nusa.tunnel.ui.screens.LogsScreen
 import com.nusa.tunnel.ui.screens.ServersScreen
@@ -62,6 +64,12 @@ fun AppRoot(
     onSocksPort: (String) -> Unit,
     sniffer: Boolean,
     onSniffer: (Boolean) -> Unit,
+    udpEngine: UdpTunnelEngine,
+    onUdpEngine: (UdpTunnelEngine) -> Unit,
+    logLevel: EngineLogLevel,
+    onLogLevel: (EngineLogLevel) -> Unit,
+    autoPing: Boolean,
+    onAutoPing: (Boolean) -> Unit,
     subUrl: String,
     onSubUrl: (String) -> Unit,
     subAuto: Boolean,
@@ -134,6 +142,12 @@ fun AppRoot(
                         onSocksPort = onSocksPort,
                         sniffer = sniffer,
                         onSniffer = onSniffer,
+                        udpEngine = udpEngine,
+                        onUdpEngine = onUdpEngine,
+                        logLevel = logLevel,
+                        onLogLevel = onLogLevel,
+                        autoPing = autoPing,
+                        onAutoPing = onAutoPing,
                     )
                     Dest.Logs -> LogsScreen()
                 }

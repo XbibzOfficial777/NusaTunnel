@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Hev's prebaked AAR declares API 29; its native packet engine has an Xray fallback below API 29. -->
+    <uses-sdk tools:overrideLibrary="hev.socks5.tunnel" />
+
     <application
         android:name=".NusaApp"
         android:allowBackup="true"
@@ -17,7 +20,7 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.NusaTunnel"
-        tools:targetApi="36">
+        tools:targetApi="37">
 
         <activity
             android:name=".MainActivity"

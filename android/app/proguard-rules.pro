@@ -4,6 +4,10 @@
 -dontwarn go.**
 -dontwarn libv2ray.**
 
+# HevSocks5Tunnel's JNI_OnLoad binds natives by the exact package/class name.
+-keep class hev.htproxy.TProxyService { *; }
+-dontwarn hev.htproxy.**
+
 # kotlinx-serialization
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt

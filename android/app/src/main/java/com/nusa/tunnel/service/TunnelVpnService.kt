@@ -12,7 +12,11 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.nusa.tunnel.MainActivity
 import com.nusa.tunnel.R
+import com.nusa.tunnel.core.HevConfigBuilder
 import com.nusa.tunnel.core.TunnelManager
+import com.nusa.tunnel.core.TunnelSettings
+import com.nusa.tunnel.core.UdpTunnelEngine
+import hev.htproxy.TProxyService
 import libv2ray.CoreController
 import libv2ray.Libv2ray
 import java.util.concurrent.atomic.AtomicBoolean
@@ -21,8 +25,8 @@ import kotlin.concurrent.thread
 /**
  * VpnService NusaTunnel — SEMUA NYATA:
  *  1. Builder VPN (addr/route/dns/MTU) → establish() → fd TUN
- *  2. fd dilempar ke Xray-core (startLoop config, tunFd)
- *  3. stopLoop() + close() interface saat disconnect — benar-benar berhenti
+ *  2. Hev (default) consumes fd TUN and forwards to Xray SOCKS; Xray-native remains selectable
+ *  3. Both engines stop before the VPN interface is closed
  */
 class TunnelVpnService : VpnService() {
 
@@ -32,6 +36,8 @@ class TunnelVpnService : VpnService() {
         const val ACTION_STOP = "com.nusa.tunnel.STOP"
         const val EXTRA_CONFIG = "config"
         const val EXTRA_TUN_FD = "tun_fd"
+        const val EXTRA_UDP_ENGINE = "udp_engine"
+        const val EXTRA_HEV_CONFIG = "hev_config"
 
         private const val TAG = "TunnelVpnService"
         private const val CHANNEL_ID = "nusatunnel_status"
@@ -43,6 +49,10 @@ class TunnelVpnService : VpnService() {
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    private val engineLifecycleLock = Any()
+    private val cleanupStarted = AtomicBoolean(false)
+    private val hevMonitor = AtomicBoolean(false)
+    @Volatile private var hevStarted = false
 
     // ---------------------------------------------------------- lifecycle
 
@@ -54,6 +64,10 @@ class TunnelVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                if (cleanupStarted.get()) {
+                    TunnelManager.onCoreError("VPN service sedang berhenti; coba lagi sesaat")
+                    return START_NOT_STICKY
+                }
                 startAsForeground()
                 if (starting.compareAndSet(false, true)) {
                     Thread { establishVpn() }.start()
@@ -62,13 +76,19 @@ class TunnelVpnService : VpnService() {
                 }
             }
             ACTION_START_CORE -> {
+                if (cleanupStarted.get()) {
+                    Log.i(TAG, "Abaikan startCore karena service sedang berhenti")
+                    return START_NOT_STICKY
+                }
                 val config = intent.getStringExtra(EXTRA_CONFIG) ?: run {
                     TunnelManager.onCoreError("Config kosong")
                     stopSelfClean()
                     return START_NOT_STICKY
                 }
                 val tunFd = intent.getIntExtra(EXTRA_TUN_FD, 0)
-                startCore(config, tunFd)
+                val engine = UdpTunnelEngine.fromPreference(intent.getStringExtra(EXTRA_UDP_ENGINE))
+                val hevConfig = intent.getStringExtra(EXTRA_HEV_CONFIG).orEmpty()
+                startCore(config, tunFd, engine, hevConfig)
             }
             ACTION_STOP -> stopSelfClean()
             else -> startAsForeground()
@@ -80,29 +100,37 @@ class TunnelVpnService : VpnService() {
 
     private fun establishVpn() {
         try {
-            closeInterface()
-            val builder = Builder()
-                .setSession("NusaTunnel")
-                .setMtu(1500)
-                .addAddress("10.10.14.1", 30)
-                .addAddress("fc00::10:10:14:1", 126)
-                .addRoute("0.0.0.0", 0)
-                .addRoute("::", 0)
-                .addDnsServer("1.1.1.1")
-                .addDnsServer("8.8.8.8")
-                // AndroidLibXrayLite startLoop() tidak menyediakan callback
-                // VpnService.protect(fd). Kecualikan UID NusaTunnel agar koneksi
-                // Xray ke server tidak masuk lagi ke TUN dan membentuk routing loop.
-                .addDisallowedApplication(packageName)
-                .setBlocking(true)
+            synchronized(engineLifecycleLock) {
+                if (cleanupStarted.get()) return@synchronized
+                closeInterface()
+                val builder = Builder()
+                    .setSession("NusaTunnel")
+                    .setMtu(1500)
+                    .addAddress("10.10.14.1", 30)
+                    .addAddress("fc00::10:10:14:1", 126)
+                    .addRoute("0.0.0.0", 0)
+                    .addRoute("::", 0)
+                    .addDnsServer("1.1.1.1")
+                    .addDnsServer("8.8.8.8")
+                    // AndroidLibXrayLite startLoop() does not expose VpnService.protect(fd).
+                    // Exclude this app so Xray's upstream sockets cannot loop into the TUN.
+                    .addDisallowedApplication(packageName)
+                    .setBlocking(true)
 
-            vpnInterface = builder.establish() ?: run {
-                TunnelManager.onCoreError("Izin VPN ditolak / interface gagal dibuat")
-                stopSelfClean()
-                return
+                val established = builder.establish()
+                if (established == null) {
+                    TunnelManager.onCoreError("Izin VPN ditolak / interface gagal dibuat")
+                    stopSelfClean()
+                    return@synchronized
+                }
+                vpnInterface = established
+                if (cleanupStarted.get()) {
+                    closeInterface()
+                    return@synchronized
+                }
+                Log.i(TAG, "VPN interface aktif, fd=${established.fd}")
+                TunnelManager.onVpnEstablished(this, established.fd)
             }
-            Log.i(TAG, "VPN interface aktif, fd=${vpnInterface!!.fd}")
-            TunnelManager.onVpnEstablished(this, vpnInterface!!.fd)
         } catch (e: Exception) {
             Log.e(TAG, "establishVpn gagal", e)
             TunnelManager.onCoreError(e.message ?: "VPN gagal: ${e.javaClass.simpleName}")
@@ -112,58 +140,134 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    // ---------------------------------------------------------- core Xray
+    // ---------------------------------------------------------- core Xray / Hev
 
-    private fun startCore(config: String, tunFd: Int) {
+    private fun startCore(
+        config: String,
+        tunFd: Int,
+        engine: UdpTunnelEngine,
+        hevConfig: String,
+    ) {
         Thread {
-            try {
-                // Hentikan instance lama dengan lock yang sama seperti polling stats.
-                TunnelManager.onServiceStopping()
-                coreController?.let { old ->
-                    runCatching {
-                        TunnelManager.stopCoreSafely(old) { coreController = null }
-                    }.onFailure { Log.w(TAG, "stop core lama: ${it.message}") }
-                }
-                val controller = Libv2ray.newCoreController(TunnelManager.coreCallback)
-                controller.startLoop(config, tunFd)
-                coreController = controller
-                if (controller.isRunning) {
+            synchronized(engineLifecycleLock) {
+                if (cleanupStarted.get()) return@synchronized
+                var newController: CoreController? = null
+                try {
+                    // Stop tun2socks before its Xray SOCKS upstream if replacing a core.
+                    TunnelManager.onServiceStopping()
+                    if (hevStarted) stopHevTunnel()
+                    coreController?.let { old ->
+                        runCatching {
+                            TunnelManager.stopCoreSafely(old) { coreController = null }
+                        }.onFailure { Log.w(TAG, "stop core lama: ${it.message}") }
+                    }
+
+                    val controller = Libv2ray.newCoreController(TunnelManager.coreCallback)
+                    newController = controller
+                    // Hev owns the VPN fd; Xray only needs its local SOCKS inbound in this mode.
+                    controller.startLoop(
+                        config,
+                        if (engine == UdpTunnelEngine.HevSocks5Tunnel) 0 else tunFd,
+                    )
+                    if (!controller.isRunning) {
+                        throw IllegalStateException("Core tidak berjalan setelah startLoop")
+                    }
+                    coreController = controller
+
+                    if (engine == UdpTunnelEngine.HevSocks5Tunnel) {
+                        startHevTunnel(hevConfig.ifBlank {
+                            HevConfigBuilder.build(tunManagerPort(), TunnelSettings.logLevel(this))
+                        }, tunFd)
+                        startHevMonitor()
+                    }
+                    if (cleanupStarted.get()) return@synchronized
                     TunnelManager.onCoreStarted()
-                } else {
-                    throw IllegalStateException("Core tidak berjalan setelah startLoop")
+                } catch (e: Exception) {
+                    newController?.takeIf { coreController !== it }?.let { controller ->
+                        runCatching { controller.stopLoop() }
+                            .onFailure { Log.w(TAG, "cleanup core parsial gagal: ${it.message}") }
+                    }
+                    Log.e(TAG, "startCore gagal", e)
+                    TunnelManager.onCoreError(e.message ?: e.javaClass.simpleName)
+                    stopSelfClean()
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "startCore gagal", e)
-                TunnelManager.onCoreError(e.message ?: e.javaClass.simpleName)
-                stopSelfClean()
             }
         }.start()
+    }
+
+    private fun tunManagerPort(): Int = TunnelManager.socksPort
+
+    private fun startHevTunnel(config: String, tunFd: Int) {
+        val configFile = java.io.File(filesDir, "hev-socks5-tunnel.yaml")
+        configFile.writeText(config, Charsets.UTF_8)
+        val started = runCatching {
+            TProxyService.TProxyStartService(configFile.absolutePath, tunFd)
+        }.getOrElse { throw IllegalStateException("Gagal memuat HevSocks5Tunnel: ${it.message}", it) }
+        if (!started) throw IllegalStateException("HevSocks5Tunnel menolak start")
+        hevStarted = true
+        TunnelManager.log("HevSocks5Tunnel menerima TUN fd; SOCKS5 127.0.0.1:${TunnelManager.socksPort}")
+        // The JNI API returns after creating its worker thread, not after parsing YAML.
+        Thread.sleep(350)
+        if (!runCatching { TProxyService.TProxyIsRunning() }.getOrDefault(false)) {
+            throw IllegalStateException("HevSocks5Tunnel berhenti saat inisialisasi; periksa log native")
+        }
+    }
+
+    private fun startHevMonitor() {
+        if (!hevMonitor.compareAndSet(false, true)) return
+        thread(name = "nusa-hev-health") {
+            while (hevMonitor.get()) {
+                try {
+                    Thread.sleep(1_000)
+                } catch (_: InterruptedException) {
+                    break
+                }
+                if (!hevMonitor.get()) break
+                val running = runCatching { TProxyService.TProxyIsRunning() }.getOrDefault(false)
+                if (!running) {
+                    hevMonitor.set(false)
+                    TunnelManager.onCoreError("HevSocks5Tunnel berhenti tak terduga")
+                    stopSelfClean()
+                    break
+                }
+            }
+        }
+    }
+
+    private fun stopHevTunnel() {
+        hevMonitor.set(false)
+        if (!hevStarted) return
+        runCatching { TProxyService.TProxyStopService() }
+            .onFailure { Log.w(TAG, "HevSocks5Tunnel stop: ${it.message}") }
+        hevStarted = false
     }
 
     // ---------------------------------------------------------- stop (NYATA)
 
     private fun stopSelfClean() {
-        // Batalkan polling dulu. stopCoreSafely() juga menunggu query native yang
-        // mungkin sedang berjalan sebelum memanggil stopLoop().
+        if (!cleanupStarted.compareAndSet(false, true)) return
+        hevMonitor.set(false)
+        // Cancel stats before locking teardown; stopCoreSafely serializes native calls.
         TunnelManager.onServiceStopping()
         thread(name = "nusa-stop") {
-            // 1. hentikan core Xray — stopLoop mematikan instance Go
-            try {
-                coreController?.let { c ->
-                    Log.i(TAG, "stopLoop dipanggil…")
-                    TunnelManager.stopCoreSafely(c) { coreController = null }
+            synchronized(engineLifecycleLock) {
+                // Stop tun2socks before the Xray SOCKS listener it depends on.
+                stopHevTunnel()
+                try {
+                    coreController?.let { c ->
+                        Log.i(TAG, "stopLoop dipanggil…")
+                        TunnelManager.stopCoreSafely(c) { coreController = null }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "stopLoop: ${e.message}")
+                } finally {
+                    coreController = null
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "stopLoop: ${e.message}")
-            } finally {
-                coreController = null
+                closeInterface()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                TunnelManager.onServiceDestroyed()
+                stopSelf()
             }
-            // 2. tutup fd TUN
-            closeInterface()
-            // 3. berhenti + notifikasi
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            TunnelManager.onServiceDestroyed()
         }
     }
 

@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 30
     env:
       LIBXRAY_VERSION: v26.11.9
+      HEV_VERSION: 2.18.0
       NUSATUNNEL_SUBSCRIPTION_URL: https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_Sub.txt
 
     steps:
@@ -51,6 +52,23 @@ jobs:
           curl -fL --retry 3 -o android/app/libs/libxray.aar \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/${LIBXRAY_VERSION}/libv2ray.aar"
           test -s android/app/libs/libxray.aar
+
+      - name: Cache HevSocks5Tunnel AAR
+        id: hev-aar-cache
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/hev-socks5-tunnel.aar
+          key: hev-socks5-tunnel-${{ env.HEV_VERSION }}
+
+      - name: Download HevSocks5Tunnel AAR
+        if: steps.hev-aar-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 -o android/app/libs/hev-socks5-tunnel.aar \
+            "https://github.com/heiher/hev-socks5-tunnel/releases/download/${HEV_VERSION}/hev-socks5-tunnel.aar"
+
+      - name: Verify HevSocks5Tunnel AAR checksum
+        run: echo "15ec8ed121663b562c99caa5bb602d1009f24e5b09e733438b81988f12feaaab  android/app/libs/hev-socks5-tunnel.aar" | sha256sum -c -
 
       - name: Run Kotlin unit tests and live subscription smoke test
         working-directory: android

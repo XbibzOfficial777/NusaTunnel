@@ -11,7 +11,16 @@ object XrayConfigBuilder {
 
     private val json = Json { encodeDefaults = false }
 
-    fun build(p: ServerProfile, socksPort: Int, snifferEnabled: Boolean = true): String {
+    fun build(
+        p: ServerProfile,
+        socksPort: Int,
+        snifferEnabled: Boolean = true,
+        includeTunInbound: Boolean = true,
+        logLevel: String = "warning",
+    ): String {
+        val safeLogLevel = logLevel.lowercase().takeIf {
+            it in setOf("debug", "info", "warning", "error", "none")
+        } ?: "warning"
         val sniffing = buildJsonObject {
             put("enabled", snifferEnabled)
             if (snifferEnabled) putJsonArray("destOverride") {
@@ -20,7 +29,7 @@ object XrayConfigBuilder {
         }
 
         val inbounds = buildJsonArray {
-            add(buildJsonObject {
+            if (includeTunInbound) add(buildJsonObject {
                 put("tag", "tun")
                 put("protocol", "tun")
                 put("settings", buildJsonObject {
@@ -65,7 +74,7 @@ object XrayConfigBuilder {
 
         val config = buildJsonObject {
             put("stats", buildJsonObject { })
-            put("log", buildJsonObject { put("loglevel", "warning") })
+            put("log", buildJsonObject { put("loglevel", safeLogLevel) })
             put("policy", buildJsonObject {
                 put("levels", buildJsonObject {
                     put("8", buildJsonObject {
@@ -201,8 +210,9 @@ object XrayConfigBuilder {
         }
 
     private fun streamSettings(p: ServerProfile): JsonObject = buildJsonObject {
-        put("network", p.network.ifBlank { "tcp" })
-        when (p.network.lowercase()) {
+        val network = p.network.ifBlank { "tcp" }.lowercase()
+        put("network", network)
+        when (network) {
             "ws" -> put("wsSettings", buildJsonObject {
                 put("path", p.wsPath.ifBlank { "/" })
                 if (p.wsHost.isNotBlank()) put("host", p.wsHost)
@@ -211,10 +221,34 @@ object XrayConfigBuilder {
                 put("serviceName", p.grpcServiceName.ifBlank { p.serviceName })
                 put("multiMode", false)
             })
+            "httpupgrade" -> put("httpupgradeSettings", buildJsonObject {
+                put("path", p.wsPath.ifBlank { "/" })
+                if (p.wsHost.isNotBlank()) put("host", p.wsHost)
+            })
+            "xhttp", "splithttp" -> put("xhttpSettings", buildJsonObject {
+                put("path", p.wsPath.ifBlank { "/" })
+                if (p.wsHost.isNotBlank()) put("host", p.wsHost)
+                if (p.xhttpMode.isNotBlank()) put("mode", p.xhttpMode)
+                val extra = runCatching {
+                    json.parseToJsonElement(p.xhttpExtra) as? JsonObject
+                }.getOrNull()
+                if (extra != null) put("extra", extra)
+            })
         }
-        put("security", if (p.tls) "tls" else "none")
-        if (p.tls) {
-            put("tlsSettings", buildJsonObject {
+        val security = p.streamSecurity.ifBlank { if (p.tls) "tls" else "none" }
+            .lowercase()
+            .takeIf { it == "tls" || it == "reality" }
+            ?: "none"
+        put("security", security)
+        when (security) {
+            "reality" -> put("realitySettings", buildJsonObject {
+                put("serverName", p.sni.ifBlank { p.host })
+                put("fingerprint", p.fingerprint.ifBlank { "chrome" })
+                if (p.realityPublicKey.isNotBlank()) put("publicKey", p.realityPublicKey)
+                if (p.realityShortId.isNotBlank()) put("shortId", p.realityShortId)
+                if (p.realitySpiderX.isNotBlank()) put("spiderX", p.realitySpiderX)
+            })
+            "tls" -> put("tlsSettings", buildJsonObject {
                 put("serverName", p.sni.ifBlank { p.host })
                 put("allowInsecure", p.allowInsecure)
                 if (p.alpn.isNotBlank()) putJsonArray("alpn") {

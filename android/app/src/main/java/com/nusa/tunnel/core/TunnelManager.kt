@@ -2,6 +2,7 @@ package com.nusa.tunnel.core
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.nusa.tunnel.service.TunnelVpnService
 import go.Seq
@@ -51,10 +52,10 @@ object TunnelManager {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
-    var currentProfile: ServerProfile? = null
+    @Volatile var currentProfile: ServerProfile? = null
         private set
 
-    var socksPort: Int = 10808
+    @Volatile var socksPort: Int = 10808
         private set
 
     @Volatile private var statsJob: Job? = null
@@ -139,7 +140,8 @@ object TunnelManager {
         if (_status.value.state == TunnelState.Connecting ||
             _status.value.state == TunnelState.Connected
         ) return
-        this.socksPort = socksPort
+        this.socksPort = socksPort.takeIf { it in 1..65535 } ?: 10808
+        if (this.socksPort != socksPort) log("Port SOCKS tidak valid; memakai port default 10808")
         currentProfile = profile
         trafficTotals.reset()
         _status.value = TunnelStatus(
@@ -170,13 +172,28 @@ object TunnelManager {
             return
         }
         scope.launch {
-            val config = XrayConfigBuilder.build(profile, socksPort)
+            val requestedEngine = TunnelSettings.udpTunnelEngine(context)
+            val engine = if (requestedEngine == UdpTunnelEngine.HevSocks5Tunnel && Build.VERSION.SDK_INT < 29) {
+                log("HevSocks5Tunnel perlu Android 10+; memakai Xray native TUN pada perangkat ini")
+                UdpTunnelEngine.XrayNative
+            } else requestedEngine
+            val logLevel = TunnelSettings.logLevel(context)
+            val config = XrayConfigBuilder.build(
+                p = profile,
+                socksPort = socksPort,
+                includeTunInbound = engine == UdpTunnelEngine.XrayNative,
+                logLevel = logLevel.xrayValue,
+            )
+            val hevConfig = HevConfigBuilder.build(socksPort, logLevel)
+            log("Engine UDP: ${engine.label}; log: ${logLevel.label}")
             log("Config Xray dibangun (${config.length} byte), memulai core (tunFd=$tunFd)…")
             _status.value = _status.value.copy(state = TunnelState.Connecting)
             context.startService(Intent(context, TunnelVpnService::class.java).apply {
                 action = TunnelVpnService.ACTION_START_CORE
                 putExtra(TunnelVpnService.EXTRA_CONFIG, config)
                 putExtra(TunnelVpnService.EXTRA_TUN_FD, tunFd)
+                putExtra(TunnelVpnService.EXTRA_UDP_ENGINE, engine.preferenceValue)
+                putExtra(TunnelVpnService.EXTRA_HEV_CONFIG, hevConfig)
             })
         }
     }

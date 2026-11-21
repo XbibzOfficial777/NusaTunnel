@@ -6,6 +6,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.Base64
 
 /**
@@ -82,6 +85,113 @@ class LinkParserTest {
         assertTrue(p.tls)
     }
 
+    @Test
+    fun `parse vless reality keeps public key short id and spiderX`() {
+        val link = "vless://reality-uuid@reality.example.com:443" +
+            "?security=reality&sni=www.google.com&fp=chrome" +
+            "&pbk=e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg" +
+            "&sid=c39cc7310a&spx=%2F&type=tcp#VLESS-Reality"
+        val p = LinkParser.parse(link)!!
+        assertEquals(Proto.VLESS, p.proto)
+        assertEquals("reality", p.streamSecurity)
+        assertTrue(p.tls)
+        assertEquals("www.google.com", p.sni)
+        assertEquals("chrome", p.fingerprint)
+        assertEquals("e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg", p.realityPublicKey)
+        assertEquals("c39cc7310a", p.realityShortId)
+        assertEquals("/", p.realitySpiderX)
+    }
+
+    @Test
+    fun `parse vless xhttp reality preserves transport mode and extra`() {
+        val extra = "%7B%22xPaddingBytes%22%3A%22100-1000%22%2C%22xmux%22%3A%7B%22maxConnections%22%3A1%7D%7D"
+        val link = "vless://xhttp-uuid@xhttp.example.com:443" +
+            "?security=reality&type=xhttp&mode=stream-up&host=front.example.com&path=%2Fedge" +
+            "&pbk=e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg&sid=c39cc7310a&fp=chrome" +
+            "&extra=$extra#VLESS-XHTTP"
+        val p = LinkParser.parse(link)!!
+        assertEquals("xhttp", p.network)
+        assertEquals("stream-up", p.xhttpMode)
+        assertEquals("/edge", p.wsPath)
+        assertEquals("front.example.com", p.wsHost)
+        assertTrue(p.xhttpExtra.contains("xPaddingBytes"))
+        assertTrue(p.xhttpExtra.contains("xmux"))
+    }
+
+    @Test
+    fun `parse vless httpupgrade transport`() {
+        val link = "vless://upgrade-uuid@upgrade.example.com:443" +
+            "?security=tls&type=httpupgrade&host=cdn.example.com&path=%2Fconnect#HTTPUpgrade"
+        val p = LinkParser.parse(link)!!
+        assertEquals("httpupgrade", p.network)
+        assertEquals("cdn.example.com", p.wsHost)
+        assertEquals("/connect", p.wsPath)
+    }
+
+    @Test
+    fun `parse Xray JSON TLS preserves ALPN list`() {
+        val config = """
+            {"outbounds":[{"protocol":"vless",
+              "settings":{"vnext":[{"address":"tls.example.com","port":443,
+                "users":[{"id":"tls-uuid","encryption":"none"}]}]},
+              "streamSettings":{"network":"tcp","security":"tls",
+                "tlsSettings":{"serverName":"tls.example.com","alpn":["h2","http/1.1"]}}}]}
+        """.trimIndent()
+        val p = LinkParser.parseXrayConfig(config).single()
+        assertEquals("h2,http/1.1", p.alpn)
+        val stream = kotlinx.serialization.json.Json.parseToJsonElement(
+            XrayConfigBuilder.build(p, 10808)
+        ).jsonObject["outbounds"]!!.jsonArray[0].jsonObject
+            ["streamSettings"]!!.jsonObject
+        val alpn = stream["tlsSettings"]!!.jsonObject["alpn"]!!.jsonArray
+        assertEquals(listOf("h2", "http/1.1"), alpn.map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `parse Xray JSON VLESS REALITY outbound`() {
+        val json = """
+            {"outbounds":[{"tag":"reality","protocol":"vless",
+              "settings":{"vnext":[{"address":"reality.example.com","port":443,
+                "users":[{"id":"uuid","encryption":"none","flow":"xtls-rprx-vision"}]}]},
+              "streamSettings":{"network":"tcp","security":"reality",
+                "realitySettings":{"serverName":"www.google.com","fingerprint":"chrome",
+                  "publicKey":"e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+                  "shortId":"c39cc7310a","spiderX":"/"}}}]}
+        """.trimIndent()
+        val p = LinkParser.parseXrayConfig(json).single()
+        assertEquals("reality", p.streamSecurity)
+        assertEquals("www.google.com", p.sni)
+        assertEquals("chrome", p.fingerprint)
+        assertEquals("e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg", p.realityPublicKey)
+        assertEquals("c39cc7310a", p.realityShortId)
+        assertEquals("/", p.realitySpiderX)
+    }
+
+    @Test
+    fun `parse Xray JSON VLESS XHTTP REALITY preserves extra object`() {
+        val config = """
+            {"outbounds":[{"tag":"xhttp-json","protocol":"vless",
+              "settings":{"vnext":[{"address":"json-xhttp.example.com","port":443,
+                "users":[{"id":"xhttp-uuid","encryption":"none"}]}]},
+              "streamSettings":{"network":"xhttp","security":"reality",
+                "xhttpSettings":{"host":"front.example.com","path":"/json-edge","mode":"packet-up",
+                  "extra":{"xPaddingBytes":"100-1000","xmux":{"maxConnections":1}}},
+                "realitySettings":{"serverName":"www.google.com","fingerprint":"chrome",
+                  "publicKey":"e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+                  "shortId":"c39cc7310a","spiderX":"/"}}}]}
+        """.trimIndent()
+        val p = LinkParser.parseXrayConfig(config).single()
+        assertEquals("xhttp", p.network)
+        assertEquals("/json-edge", p.wsPath)
+        assertEquals("front.example.com", p.wsHost)
+        assertEquals("packet-up", p.xhttpMode)
+        assertTrue(p.xhttpExtra.contains("xPaddingBytes"))
+        assertTrue(p.xhttpExtra.contains("maxConnections"))
+        assertEquals("reality", p.streamSecurity)
+        assertEquals("www.google.com", p.sni)
+        assertEquals("e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg", p.realityPublicKey)
+    }
+
     // ---------------------------------------------------------- trojan
 
     @Test
@@ -95,6 +205,39 @@ class LinkParserTest {
         assertTrue(p.tls) // trojan selalu TLS
         assertEquals("tr.example.com", p.sni)
         assertEquals("Trojan-X", p.remarks)
+    }
+
+    @Test
+    fun `parse trojan reality`() {
+        val link = "trojan://secret@tr-reality.example.com:443" +
+            "?security=reality&sni=www.microsoft.com&fp=chrome" +
+            "&pbk=e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg&sid=601e43eb94a28919#Trojan-Reality"
+        val p = LinkParser.parse(link)!!
+        assertEquals(Proto.Trojan, p.proto)
+        assertEquals("reality", p.streamSecurity)
+        assertTrue(p.tls)
+        assertEquals("www.microsoft.com", p.sni)
+        assertEquals("e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg", p.realityPublicKey)
+        assertEquals("601e43eb94a28919", p.realityShortId)
+    }
+
+    @Test
+    fun `parse trojan XHTTP REALITY link preserves extra object`() {
+        val extra = "%7B%22scMaxEachPostBytes%22%3A%22100000-200000%22%2C%22xmux%22%3A%7B%22maxConnections%22%3A1%7D%7D"
+        val link = "trojan://xhttp-password@trojan-xhttp.example.com:443" +
+            "?security=reality&type=xhttp&mode=stream-one&host=front.example.com&path=%2Ftrojan-edge" +
+            "&pbk=e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg&sid=601e43eb94a28919" +
+            "&sni=www.microsoft.com&fp=chrome&extra=$extra#Trojan-XHTTP"
+        val p = LinkParser.parse(link)!!
+        assertEquals(Proto.Trojan, p.proto)
+        assertEquals("xhttp", p.network)
+        assertEquals("stream-one", p.xhttpMode)
+        assertEquals("/trojan-edge", p.wsPath)
+        assertEquals("front.example.com", p.wsHost)
+        assertTrue(p.xhttpExtra.contains("scMaxEachPostBytes"))
+        assertTrue(p.xhttpExtra.contains("xmux"))
+        assertEquals("reality", p.streamSecurity)
+        assertEquals("www.microsoft.com", p.sni)
     }
 
     @Test
