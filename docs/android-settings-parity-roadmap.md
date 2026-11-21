@@ -1,103 +1,100 @@
-# Android settings parity plan
+# Android HTTP Custom parity roadmap
 
-**Baseline:** v2.2.4 (`e6c8011`, released 2026-11-21)  
-**Reference:** all 38 settings screenshots in the supplied `ISI SETTINGS` folder and `BACA.TXT`.  
-**Status:** Phase 1 is in progress on `settings-parity-phase1` (commit `181480c`). Remote GitHub Actions run [44882232628](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44882232628) passed the unit/config tests, release APK build, and Xray-core config validation. VPN DNS/MTU and the partial settings hierarchy are not device-validated; remaining General/Connection parity is still open. Planning and implementation must be feature-backed; an enabled UI control is not complete until its stored value changes real runtime behavior.
+**Baseline:** `main` at `dac9fbcf665aea1e091a959b3216486a1be3f35a` (Phase 1 merged through PR [#1](https://github.com/XbibzOfficial777/NusaTunnel/pull/1), 2026-11-21).
 
-## Acceptance rule — no simulation
+**Reference:** all 38 supplied screenshots under `ISI SETTINGS` and `BACA.TXT`. The item-by-item source/feature/runtime/test mapping is [`http-custom-reference-matrix.md`](http-custom-reference-matrix.md); it is the authoritative omission check.
 
-For every setting that is shown as available:
+**Prior verification:** merged PR CI [44882508257](https://github.com/XbibzOfficial777/NusaTunnel/actions/runs/44882508257) passed its unit tests, live subscription smoke test, release APK assembly/size report, and Xray-core config validation. That run did **not** boot Android.
 
-1. its value is validated and persisted;
-2. the Android service or the selected protocol engine consumes that value (not just the UI);
-3. changes take effect at the stated time, usually on the next connection;
-4. tests cover defaults, validation, persistence/config generation where possible, and CI validates generated native-engine configs;
-5. unsupported engine-specific settings are omitted or explicitly shown as unavailable. They must not be represented by active controls that do nothing.
+**Current follow-up:** local branch `settings-parity-kvm-emulator` adds Compose instrumentation dependencies/test coverage and a KVM-gated x86_64 Android emulator job. Its first remote Actions result is pending. Full HTTP Custom parity is **not implemented**; no release is authorized by this roadmap.
 
-Do not call Android builds or app tests in the sandbox. Use GitHub Actions for builds/tests. Do not tag/publish a release until required remote checks pass. Device-only behavior (VPN lifecycle, routing, battery, hotspot sharing) must be identified as unverified until tested on a real Android device.
+## Non-negotiable acceptance rule — no simulation
 
-## Reference inventory
+For every setting/control that is exposed as available:
 
-### General
+1. Its value is owned by a typed setting/profile model, validated at UI and persistence/runtime boundaries, persisted, and migrated safely.
+2. The Android service or the actual selected protocol engine consumes it; a UI state change or saved preference alone is not a functional feature.
+3. The user can observe the defined behavior and the documented apply time (immediately, next connection, reconnect, or OS settings).
+4. Tests cover defaults, min/max and invalid input, persistence/recreation, config generation and appropriate runtime behavior. CI validates generated configs with the same engine version where possible.
+5. Network/protocol controls require controlled local test services and traffic assertions; emulator navigation alone is not proof of operation. Unsupported controls are omitted or explicitly marked unavailable until their engine/path exists.
+6. VPN lifecycle, routing, leakage, hotspot, battery and OS settings behaviors are not claimed verified from UI tests. Record what still needs a physical-device check.
 
-- Language, Dynamic color, Theme colors, Theme mode
-- Log filter, Log entry limit, Speed unit
+Never build or run app tests in the local sandbox. Use remote GitHub Actions only. Do not publish/tag a release until all required remote checks pass. Do not claim bug-free behavior without adequate remote and device coverage.
 
-### Connection
+## Reference coverage summary
 
-- Payload client/remote buffers
-- Load-balancing strategy
-- SOCKS engine type, SOCKS UDP support, BadVPN UDPGW port
-- VPN behavior: DNS, MTU, IPv6, per-app VPN, auto-reconnect, keep-awake, battery settings, always-on VPN
-- Connection-check URL, interval, timeout, retry limit, stop-on-failure
-- Auto Ping modes and advanced target/interval/timeout/reset/failure/retry settings
-- Share Net: enabled state, reach method, local HTTP proxy/port, optional authentication
+The 38-row matrix includes every image, including screenshots of profile editors, logs, a device-authorization dialog and a response checker—not just the Settings screen. The main feature groups are:
 
-### Tunnel
+- **General:** language; dynamic color; theme palette/mode; log verbosity; numeric log-entry cap 100–10,000; Byte/s versus bit/s.
+- **Connection:** client/remote payload buffers; load balancing; BadVPN/Hev SOCKS engine and UDPGW port; DNS/MTU/IPv6; per-app VPN; reconnect/keep-awake/battery/Always-on; connection-check URL/timing/retries/stop-on-failure; Auto Ping modes and advanced reset policy; Share Net reach method/HTTP proxy/port/auth/status; connection timeout/reconnect limit.
+- **SSH, Payload and HCR:** Standard/HCR modes; Payload/Enhanced/TLS/SlowDNS methods; SSH host/account/password; payload and remote proxy; SNI/version/TLS verification; keep-alive, proxy handling, TCP_NODELAY and compression; HCR concurrency, batch/chunk/frame, adaptation and real calibration.
+- **SlowDNS:** profile-level resolver/type/nameserver/public key and global multi-login/session/KCP/QNAME/EDNS0/calibration behavior.
+- **V2Ray/Xray:** GUI and JSON profiles; transport/TLS/SNI/fingerprint/ALPN/ECH/pinned cert/Mux; SOCKS UDP/proxy/sniffing/routing-only; DNS/host presets/custom hosts; routing rules/presets; asset files; fragment/noise only if supported by the pinned engine.
+- **Other engines and tools:** Psiphon/OpenVPN profile/proxy behavior; UDP Custom rate/window/idle/PMTU settings; runtime logs; Hardware ID/Access ID authorization; HTTP/SNI/UDP/DNS response checker with proxy and custom headers/body.
 
-- Properties: connection timeout, maximum reconnect attempts
-- HCR: upload/download parallelism, batch, chunk, frame, adaptive download, calibration
-- SlowDNS: multi-login, sessions, KCP window, calibration, QNAME and EDNS0 limits
-- SSH: keep-alive, proxy handling, TCP_NODELAY, compression
-- V2Ray: default view, SOCKS UDP, proxy handling, destination detection/routing-only, detected protocols, fragment/noise, DNS, remote DNS, DNS-host presets/custom hosts, routing rules
-- Psiphon: default view and proxy handling
-- OpenVPN: default view and proxy handling
-- UDP Custom: upload/download rates, receive window, idle timeout, Path MTU discovery
+See the matrix for exact screenshot filenames, each distinct visible item, current support boundaries, owner, and acceptance evidence. The duplicate-looking HCR state and repeated SSH/V2Ray editor/navigation screenshots remain separate rows so no reference image silently disappears.
 
 ## Phased implementation
 
-### Phase 0 — inventory and safeguards (this document)
+### Phase 0 — screenshot inventory and safeguards
 
-- Map every screenshot item to a persistence owner, runtime consumer, protocol dependency, and verification requirement.
-- Keep unsupported controls out of the active UI until the corresponding engine path exists.
+- **Recorded:** the 38 screenshots have been individually checked and mapped row-by-row in `http-custom-reference-matrix.md`.
+- Keep that matrix and `android-support-matrix.md` accurate as implementation changes. Every row must eventually name the runtime consumer and passing tests/device checks; “planned” is never reported as “supported.”
+- Keep the KVM check fail-closed: if `/dev/kvm` is unavailable, fail CI instead of silently using a non-accelerated emulator.
 
-### Phase 1 — settings architecture and existing Android/Xray path
+### Phase 1 — settings architecture and existing Android/Xray path (**merged**)
 
-- Replace the flat settings form with the reference's General / Connection / Tunnel hierarchy and real subpages.
-- Consolidate preference validation and migration; keep existing SOCKS port, log level/retention, auto-ping, UDP-engine, and sniffing behavior intact.
-- Add only settings that can be wired safely to the existing Android `VpnService`, Hev, and Xray path (for example VPN DNS/MTU and Xray routing/DNS/UDP options after runtime-config validation).
-- Do not add an IPv6-off control until the packet path can block IPv6 without leaking it outside the VPN.
-- Confirm UI state survives navigation/recreation and preferences survive app restart; run remote CI, including Xray-core config validation.
+- The General / Connection / Tunnel settings hierarchy and the first real VPN Behavior page are merged in `dac9fbc`.
+- Existing Android DNS and MTU values are validated/persisted and consumed by Android `VpnService.Builder`, Xray TUN config and Hev config on the next connection. IPv6 remains routed through the VPN; no IPv6-off switch until packet blocking is validated without leakage.
+- The old merged CI run passed JVM/config/release checks but had no Android virtual device. The follow-up adds `SettingsKvmInstrumentedTest` for actual screen navigation, valid DNS/MTU save-to-preference behavior and invalid DNS rejection, plus an x86_64 KVM emulator job. Do not mark those device tests passed until the new remote run is green.
+- Phase 1 is not full Settings parity; General/Connection/Tunnel controls absent from the app remain absent.
 
-### Phase 2 — SSH, proxy/payload, and HCR
+### Phase 2 — SSH, proxy/payload and HCR
 
-- Add an actual SSH connection/forwarding engine and profile model/import path, then wire payload/proxy modes, keep-alive, TCP_NODELAY, and compression to that engine.
-- Treat HCR upload/download/batch/chunk/frame/adaptive/calibration as incomplete until the actual compatible HCR exchange and measurements are implemented; calibration must perform network requests and report real results.
-- Verify server handshake, proxy authentication, failures/timeouts, cancellation, and teardown in CI/device scenarios before exposing controls as available.
+- First select and integrate a real, maintained, license-compatible SSH client/forwarding engine; define credential storage, profile versioning/import, host/proxy parsing, cancellation and VpnService lifecycle before exposing an SSH profile.
+- Implement the reference's Standard/HCR modes, Payload/Enhanced/TLS methods, remote proxy/authentication, SNI/version and explicit certificate validation policy. Wire keep-alive, SSH-direct proxy mode, TCP_NODELAY and compression to the actual client.
+- Implement HCR's compatible framed exchange before exposing upload/download/batch/chunk/frame controls. Adaptive download and calibration must make real requests and return measured results; no fabricated “optimal” values.
+- Test against controlled SSH, HTTP CONNECT/payload, TLS and HCR endpoints: handshake success/failure, auth, cert validation/insecure opt-in, timeouts, retries, backpressure, cancellation and teardown. Assess ABI/license/data-size impact before selecting dependencies.
 
 ### Phase 3 — SlowDNS
 
-- Integrate a real, license-compatible DNS-tunnel client and route its transport through the connection lifecycle.
-- Wire sessions/multi-login, KCP window, QNAME/EDNS0 limits and calibration to the implementation; verify DNS packet limits and failure behavior with a controlled endpoint.
+- Integrate a real, license-compatible DNS-tunnel client and route its transport through the selected connection lifecycle; do not emulate it with ordinary DNS or Xray.
+- Cover profile-level DNS type/resolver/NS/public-key fields and global multi-login, sessions, KCP window, QNAME/EDNS0 limits and calibration.
+- Use controlled DNS-tunnel authorities/resolvers to verify wire-size boundaries, session semantics, calibration, failure handling and stop behavior.
 
-### Phase 4 — V2Ray/Xray advanced routing
+### Phase 4 — advanced V2Ray/Xray and assets
 
-- Expand actual Xray runtime configuration for SOCKS UDP, DNS, routing rules/domain strategy, and supported transport/security options.
-- Enable only options supported by the pinned Xray core. Fragment/noise controls must be rejected or hidden unless the exact generated config is accepted by that core and works in traffic tests.
-- Validate representative generated configs using the same Xray binary/AAR version used by the app.
+- Expand the actual pinned Xray configuration/profile path for screenshot-backed transport, security, DNS, SOCKS UDP, sniffing/routing-only, custom DNS hosts and routing rules/presets.
+- Add the GUI profile editor and raw JSON editor only with validation, safe secret handling, persistence/round-trip tests and a runtime proof that the saved config is the one started by Xray.
+- Add Asset files actions only if downloads are integrity-checked and the app can report stale, absent, corrupt and offline states. Keep the bundled/updated data size measured.
+- Test generated configs with the exact Xray-core version used by the app and prove routing/DNS behavior using controlled traffic. Reject/hide fragment/noise unless that exact core accepts the settings and traffic tests confirm the behavior.
 
 ### Phase 5 — OpenVPN and Psiphon engines
 
-- Integrate and lifecycle-manage real OpenVPN and Psiphon clients as distinct engines, including profile import, credentials, logs, foreground-service/VpnService coordination, and stop/error handling.
-- Before adding native dependencies, assess ABI coverage, APK/data-size impact, licensing/source obligations, and compatibility with the existing single Android VPN interface.
-- Do not route these profiles through Xray as a substitute.
+- Integrate and lifecycle-manage real OpenVPN and Psiphon clients as distinct engines, including profile import, credentials, logs, foreground-service/VpnService coordination and stop/error handling. Do not route these profiles through Xray as a substitute.
+- Resolve licensing/source obligations, ABI coverage, native-library footprint and compatibility with the single Android VPN interface before implementation. Test with controlled local endpoints and both positive/negative profile cases.
 
-### Phase 6 — remaining connection and UDP features
+### Phase 6 — remaining General, Connection, UDP and diagnostics
 
-- Implement real per-app VPN selection, auto-reconnect/connection checks, richer Auto Ping recovery, Share Net's local proxy/authentication, and UDP Custom tuning only where the selected engine provides a real runtime parameter.
-- Security-sensitive behavior (credential storage, listening interfaces, proxy authentication, IPv6 leak prevention, hotspot reachability) requires explicit tests and user-visible status.
+- Complete remaining General preferences (language/theme/dynamic color, numeric log cap and speed unit), payload buffers/load balancing and SOCKS/BadVPN/UDPGW choices only when each has a real consumer.
+- Implement per-app VPN, connection-check URL/interval/timeout/attempt/stop policy, richer Auto Ping, connection properties/reconnect limits, Share Net local HTTP proxy/authentication/reach modes, and UDP Custom parameters. Validate lifecycle, port conflicts, credential protection, no-leak behavior and observable status.
+- Implement the response checker for HTTP/SNI/UDP/DNS with direct/manual proxy, custom headers/body, cancellation and structured results. Verify each mode against controlled services.
+- Hardware ID/Access ID: keep the reference row explicitly blocked until the product owner supplies or approves the authorization endpoint, request/response contract, identity lifetime and privacy policy. Never make “Get ID” report success against a fake/local-only service.
+- Use emulator instrumentation plus controlled test services for app-level behavior; mark hotspot, physical routing, battery and Android system-settings behavior as device-only until a real device check is completed.
 
-### Phase 7 — parity review, size, and release gate
+### Phase 7 — parity review, size and release gate
 
-- Walk every row in the reference inventory and record: implemented runtime consumer, persistence/migration, tests, and any device-only verification.
-- Audit the supplied icon and all launcher variants, strings, accessibility, and settings navigation.
-- Measure release APKs per ABI and universal, plus installed data separately; the supplied 50 MB / 150 MB figures are goals, not promises. A universal APK containing multiple native ABIs is not directly comparable to a per-ABI APK.
-- Publish only after the remote test/build/release checks pass. Do not claim perfect/no-bug behavior without device validation.
+- Walk all 38 rows and record each setting's model, persistence/migration, validation, runtime consumer, automated test evidence, CI result and remaining device-only checks.
+- Compare the reference Home / Profiles / Settings / Guide navigation with NusaTunnel's current Beranda / Server / Atur / Log structure; agree the Guide destination's behavior (no Guide content screenshot was supplied) without silently removing Logs. Audit accessibility, strings, import/export and negative/error states—not just screenshot similarity.
+- Measure release APKs per ABI and universal, plus installed app/data separately. The supplied 50 MB APK / 150 MB including data figures are goals, not verified sizes or promises; a universal multi-ABI APK is not comparable to a per-ABI APK.
+- Publish only after all required remote tests/builds pass. Keep release publishing separate from pull-request CI and block release on any failing or skipped required check.
 
-## Current baseline reality
+## Current Android support boundary
 
-At v2.2.4 Android has working VMess, VLESS, Trojan, and Shadowsocks through Xray; Hev and Xray-native TUN choices; a validated/persisted local SOCKS port; Xray sniffing; engine log level and retention; and a limited foreground/offline Auto Ping. SSH, HCR, SlowDNS, OpenVPN, Psiphon, Share Net, and the remaining screenshot controls are **not yet implemented** in Android. The authoritative protocol boundary is `docs/android-support-matrix.md`.
+As merged, Android has VMess, VLESS, Trojan and Shadowsocks through Xray; Hev and Xray-native TUN choices; a validated/persisted local SOCKS port; Xray sniffing; engine log level/retention; limited foreground/offline Auto Ping; and persisted VPN DNS/MTU consumed by Android/Xray/Hev on the next connection. Exact caveats and test boundaries are in `android-support-matrix.md`.
+
+SSH, HCR, SlowDNS, OpenVPN, Psiphon, BadVPN/UDPGW, Share Net, advanced per-app/recovery/routing controls, response checking, and the remaining screenshot features are **not yet fully implemented**. Do not expose unsupported options as working controls.
 
 ## Size baseline
 
-v2.2.3 universal APK: 181,052,794 bytes. v2.2.4 GitHub Actions reported ~32.81 MiB for arm64 and ~69.65 MiB for universal; GitHub Release contains per-ABI APKs. New engines must have their native-library footprint measured per ABI before release.
+The merged CI reported per-ABI release APKs of 32.82 MiB (arm64-v8a), 33.38 MiB (armeabi-v7a), 34.32 MiB (x86), 33.81 MiB (x86_64), and 69.66 MiB universal. These are package sizes, not installed/data sizes. The v2.2.3 universal APK baseline was 181,052,794 bytes. Re-measure after every native engine addition.

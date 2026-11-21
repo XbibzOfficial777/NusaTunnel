@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nusa.tunnel.BuildConfig
@@ -219,6 +220,7 @@ private fun VpnBehaviorPage(
             value = primaryDns,
             onValueChange = { primaryDns = it },
             label = "Primary DNS",
+            testTag = "vpn_primary_dns",
             valid = TunnelSettings.isValidIpv4Address(primaryDns),
             error = "Masukkan alamat IPv4 yang valid, misalnya 8.8.8.8.",
         )
@@ -227,6 +229,7 @@ private fun VpnBehaviorPage(
             value = fallbackDns,
             onValueChange = { fallbackDns = it },
             label = "Fallback DNS",
+            testTag = "vpn_fallback_dns",
             valid = TunnelSettings.isValidIpv4Address(fallbackDns),
             error = "Masukkan alamat IPv4 yang valid, misalnya 1.1.1.1.",
         )
@@ -238,6 +241,7 @@ private fun VpnBehaviorPage(
             value = mtuText,
             onValueChange = { mtuText = it.filter { character -> character.isDigit() }.take(4) },
             label = "MTU (1280–9000)",
+            testTag = "vpn_mtu",
             valid = mtu != null,
             error = "Masukkan MTU antara ${VpnBehaviorSettings.MIN_MTU} dan ${VpnBehaviorSettings.MAX_MTU}.",
             keyboardType = KeyboardType.Number,
@@ -261,7 +265,7 @@ private fun VpnBehaviorPage(
             )
         },
         enabled = dnsValid && mtu != null,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("save_vpn_behavior"),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = Frost),
     ) {
@@ -276,6 +280,7 @@ private fun NumericOrIpField(
     label: String,
     valid: Boolean,
     error: String,
+    testTag: String,
     keyboardType: KeyboardType = KeyboardType.Ascii,
 ) {
     Column(
@@ -286,7 +291,7 @@ private fun NumericOrIpField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag(testTag),
             label = { Text(label) },
             isError = !valid,
             singleLine = true,
