@@ -273,6 +273,22 @@ jobs:
         with:
           gradle-version: '9.9.2'
 
+      - name: Setup Android SDK for signed install smoke test
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '15859902'
+          packages: platform-tools
+
+      - name: Install Android build tools and KVM emulator image
+        run: |
+          sdkmanager 'platform-tools' 'platforms;android-37.1' 'build-tools;37.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
+          if [[ ! -e /dev/kvm ]]; then
+            echo '::error::/dev/kvm is missing; refusing to skip signed install/update verification.'
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_SDK_ROOT/emulator/emulator" -accel-check
+
       # Engine Xray gobind (AAR, 60 MB) — di-cache biar build berikutnya cepat
       - name: Cache engine AAR
         id: aar-cache
@@ -456,6 +472,71 @@ jobs:
           done
           sha256sum NusaTunnel-v${VERSION}-*.apk NusaTunnel-v${VERSION}-*.apks > SHA256SUMS.txt
           ls -la
+
+      - name: Prepare signed install/update smoke-test script
+        run: |
+          cat > "$RUNNER_TEMP/android-install-smoke.sh" <<'BASH'
+          set -euo pipefail
+          package_name=com.nusa.tunnel
+          old_apk="$RUNNER_TEMP/NusaTunnel-v2.2.5-universal.apk"
+          old_sums="$RUNNER_TEMP/v2.2.5-SHA256SUMS.txt"
+          new_apk="$GITHUB_WORKSPACE/android/app/build/outputs/apk/nusaRelease/NusaTunnel-v${VERSION}-universal.apk"
+          curl -fL --retry 3 -o "$old_apk" "https://github.com/XbibzOfficial777/NusaTunnel/releases/download/v2.2.5/NusaTunnel-v2.2.5-universal.apk"
+          curl -fL --retry 3 -o "$old_sums" "https://github.com/XbibzOfficial777/NusaTunnel/releases/download/v2.2.5/SHA256SUMS.txt"
+          expected_old="$(awk '$2 == "NusaTunnel-v2.2.5-universal.apk" {print $1; exit}' "$old_sums")"
+          actual_old="$(sha256sum "$old_apk" | awk '{print $1}')"
+          if [[ -z "$expected_old" || "$actual_old" != "$expected_old" ]]; then
+            echo '::error::The published v2.2.5 universal APK failed its release checksum.'
+            exit 1
+          fi
+          adb install "$old_apk"
+          old_info="$(adb shell dumpsys package "$package_name" | grep -m 1 -E 'versionName=2\.2\.5([[:space:]]|$)' || true)"
+          if [[ -z "$old_info" ]]; then
+            echo '::error::The sideloaded test APK does not report versionName 2.2.5.'
+            exit 1
+          fi
+          echo "Installed legacy package: $old_info"
+          if update_output="$(adb install -r "$new_apk" 2>&1)"; then
+            echo '::error::Android unexpectedly accepted an in-place update from sideloaded v2.2.5.'
+            exit 1
+          fi
+          if ! grep -q 'INSTALL_FAILED_UPDATE_INCOMPATIBLE' <<<"$update_output"; then
+            echo '::error::Update was rejected for an unexpected reason:'
+            printf '%s\n' "$update_output"
+            exit 1
+          fi
+          echo 'Confirmed v2.2.5 cannot update in place after signing-key rotation.'
+          adb uninstall "$package_name"
+          adb install "$new_apk"
+          new_info="$(adb shell dumpsys package "$package_name" | grep -m 1 -E 'versionCode=8([[:space:]]|$)' || true)"
+          if [[ -z "$new_info" ]]; then
+            echo '::error::The v2.2.7 APK did not clean-install as versionCode 8.'
+            exit 1
+          fi
+          echo "Installed release package: $new_info"
+          adb shell monkey -p "$package_name" -c android.intent.category.LAUNCHER 1
+          for attempt in {1..10}; do
+            if adb shell pidof "$package_name" | grep -qE '[0-9]'; then
+              echo 'Confirmed v2.2.7 clean install and launcher start on KVM.'
+              exit 0
+            fi
+            sleep 1
+          done
+          echo '::error::The installed v2.2.7 app did not remain running after launch.'
+          exit 1
+          BASH
+          chmod 700 "$RUNNER_TEMP/android-install-smoke.sh"
+
+      - name: Smoke-test Android install and update behavior on KVM
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -camera-back none -camera-front none -gpu swiftshader_indirect -accel on
+          script: bash "$RUNNER_TEMP/android-install-smoke.sh"
 
       # --------------------------------------------------------------- release
 
